@@ -421,10 +421,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         // Se siamo in nav mode, mostra "NAV MODE" come testo separato
         if (ctrlLatchFromNavMode && ctrlLatchActive) {
             statusBarTextView?.text = "NAV MODE"
-            // Aggiorna lo stile per nav mode: nero e più basso
-            statusBarLayout?.setBackgroundColor(Color.BLACK)
+            // Aggiorna lo stile per nav mode: nero semi-trasparente e più basso
+            // Usa Color.argb() per creare un nero con alpha 200 (circa 78% opaco)
+            statusBarLayout?.setBackgroundColor(Color.argb(100, 0, 0, 0))
             statusBarTextView?.setPadding(16, 6, 16, 6) // Padding ridotto per renderla più bassa
-            statusBarTextView?.textSize = 12f // Testo leggermente più piccolo
+            statusBarTextView?.textSize = 10f // Testo leggermente più piccolo
             updateStatusBarLayout()
             return
         }
@@ -513,29 +514,43 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         // Reset degli stati modificatori quando si entra in un nuovo campo (solo se non è un restart)
         // IMPORTANTE: Disattiva il nav mode SOLO quando si entra in un campo di testo editabile
         // Non disattivarlo quando si passa a un altro elemento UI (come icone, liste, ecc.)
-        if (!restarting && isEditable) {
-            // Verifica se abbiamo un input connection valido (campo di testo realmente editabile)
-            val inputConnection = currentInputConnection
-            val hasValidInputConnection = inputConnection != null
-            
-            if (ctrlLatchFromNavMode && hasValidInputConnection) {
-                // Disattiva il nav mode SOLO quando si entra in un campo di testo editabile con input connection
-                ctrlLatchFromNavMode = false
-                ctrlLatchActive = false
-                Log.d(TAG, "onStartInput() - disattivato nav mode perché entrato in campo di testo editabile con input connection")
+        if (!restarting) {
+            // Se siamo in nav mode, preservalo SEMPRE a meno che non entriamo in un campo realmente editabile
+            if (ctrlLatchFromNavMode && ctrlLatchActive) {
+                // Verifica se il campo è REALMENTE editabile (non solo sembra editabile)
+                val isReallyEditable = isEditable && info?.let { editorInfo ->
+                    val inputType = editorInfo.inputType
+                    val inputClass = inputType and android.text.InputType.TYPE_MASK_CLASS
+                    // Verifica che sia un tipo di input realmente editabile
+                    inputClass == android.text.InputType.TYPE_CLASS_TEXT ||
+                    inputClass == android.text.InputType.TYPE_CLASS_NUMBER ||
+                    inputClass == android.text.InputType.TYPE_CLASS_PHONE ||
+                    inputClass == android.text.InputType.TYPE_CLASS_DATETIME
+                } ?: false
+                
+                // Verifica anche se abbiamo un input connection valido
+                val inputConnection = currentInputConnection
+                val hasValidInputConnection = inputConnection != null
+                
+                if (isReallyEditable && hasValidInputConnection) {
+                    // Disattiva il nav mode SOLO quando si entra in un campo di testo realmente editabile
+                    ctrlLatchFromNavMode = false
+                    ctrlLatchActive = false
+                    Log.d(TAG, "onStartInput() - disattivato nav mode perché entrato in campo di testo realmente editabile")
+                    resetModifierStates(preserveNavMode = false)
+                } else {
+                    // Non è un campo realmente editabile o non c'è input connection - mantieni il nav mode
+                    Log.d(TAG, "onStartInput() - nav mode attivo, campo non realmente editabile (isReallyEditable: $isReallyEditable, hasInputConnection: $hasValidInputConnection), mantengo nav mode")
+                    // Non resettare gli stati modificatori, preserva il nav mode
+                }
+            } else if (isEditable) {
+                // Non siamo in nav mode ma siamo in un campo editabile - reset normale
                 resetModifierStates(preserveNavMode = false)
-            } else if (ctrlLatchFromNavMode) {
-                // Siamo in nav mode ma non abbiamo un input connection valido - mantieni il nav mode
-                Log.d(TAG, "onStartInput() - nav mode attivo, ma nessun input connection valido, mantengo nav mode")
-                // Non resettare gli stati modificatori, preserva il nav mode
-            } else {
-                // Non siamo in nav mode, reset normale
+            } else if (!ctrlLatchFromNavMode) {
+                // Non siamo in nav mode e non siamo in un campo editabile - reset normale
                 resetModifierStates(preserveNavMode = false)
             }
-        } else if (!restarting && ctrlLatchFromNavMode) {
-            // Non siamo in un campo editabile ma siamo in nav mode - mantieni il nav mode
-            Log.d(TAG, "onStartInput() - nav mode attivo, campo non editabile, mantengo nav mode")
-            // Non resettare gli stati modificatori, preserva il nav mode
+            // Se siamo in nav mode e non siamo in un campo editabile, non fare nulla (mantieni nav mode)
         }
     }
 
@@ -554,21 +569,44 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         // Segna che siamo in un contesto di input valido solo se il campo è editabile
         // MA: se siamo in nav mode, non impostare isInputViewActive a true se non c'è un campo editabile
         if (isEditable) {
-            isInputViewActive = true
-            // Se siamo in nav mode e entriamo in un campo editabile, disattiva il nav mode
-            if (ctrlLatchFromNavMode) {
-                val inputConnection = currentInputConnection
-                if (inputConnection != null) {
-                    ctrlLatchFromNavMode = false
-                    ctrlLatchActive = false
-                    Log.d(TAG, "onStartInputView() - disattivato nav mode perché entrato in campo di testo editabile")
+            // Verifica se il campo è REALMENTE editabile (non solo sembra editabile)
+            val isReallyEditable = info?.let { editorInfo ->
+                val inputType = editorInfo.inputType
+                val inputClass = inputType and android.text.InputType.TYPE_MASK_CLASS
+                // Verifica che sia un tipo di input realmente editabile
+                inputClass == android.text.InputType.TYPE_CLASS_TEXT ||
+                inputClass == android.text.InputType.TYPE_CLASS_NUMBER ||
+                inputClass == android.text.InputType.TYPE_CLASS_PHONE ||
+                inputClass == android.text.InputType.TYPE_CLASS_DATETIME
+            } ?: false
+            
+            if (isReallyEditable) {
+                isInputViewActive = true
+                // Se siamo in nav mode e entriamo in un campo realmente editabile, disattiva il nav mode
+                if (ctrlLatchFromNavMode && ctrlLatchActive) {
+                    val inputConnection = currentInputConnection
+                    if (inputConnection != null) {
+                        ctrlLatchFromNavMode = false
+                        ctrlLatchActive = false
+                        Log.d(TAG, "onStartInputView() - disattivato nav mode perché entrato in campo di testo realmente editabile")
+                    }
+                }
+            } else {
+                // Non è un campo realmente editabile - se siamo in nav mode, mantienilo
+                if (ctrlLatchFromNavMode && ctrlLatchActive) {
+                    Log.d(TAG, "onStartInputView() - nav mode attivo, campo non realmente editabile, mantengo nav mode")
+                    isInputViewActive = false
+                } else {
+                    isInputViewActive = false
                 }
             }
         } else if (!ctrlLatchFromNavMode) {
             // Non siamo in nav mode e non c'è un campo editabile
             isInputViewActive = false
+        } else {
+            // Siamo in nav mode e non c'è un campo editabile - mantieni isInputViewActive = false
+            isInputViewActive = false
         }
-        // Se siamo in nav mode e non c'è un campo editabile, mantieni isInputViewActive = false
         // Ricarica la soglia del long press (potrebbe essere cambiata nelle impostazioni)
         loadLongPressThreshold()
         // Reset dello stato quando si inizia a inserire testo
@@ -592,12 +630,13 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        Log.d(TAG, "onFinishInputView() chiamato - finishingInput: $finishingInput")
+        Log.d(TAG, "onFinishInputView() chiamato - finishingInput: $finishingInput, ctrlLatchFromNavMode: $ctrlLatchFromNavMode, ctrlLatchActive: $ctrlLatchActive")
         // Segna che non siamo più in un contesto di input valido
         isInputViewActive = false
         // Reset degli stati modificatori quando la view viene nascosta
+        // IMPORTANTE: Preserva il nav mode anche qui, altrimenti viene resettato quando si naviga
         if (finishingInput) {
-            resetModifierStates()
+            resetModifierStates(preserveNavMode = true)
         }
     }
     
@@ -657,13 +696,15 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                     lastCtrlReleaseTime
                 )
                 
-                // Applica le modifiche agli stati
+                // IMPORTANTE: Applica PRIMA ctrlLatchActive e ctrlLatchFromNavMode
+                // PRIMA di chiamare ensureInputViewCreated(), così quando viene chiamato
+                // onStartInput() o onStartInputView(), il flag è già impostato
                 result.ctrlLatchActive?.let { 
                     ctrlLatchActive = it
-                    // Se viene attivato nel nav mode, marca il flag
+                    // Se viene attivato nel nav mode, marca il flag PRIMA
                     if (it) {
                         ctrlLatchFromNavMode = true
-                        Log.d(TAG, "Nav mode: Ctrl latch attivato, ctrlLatchFromNavMode = true")
+                        Log.d(TAG, "Nav mode: Ctrl latch attivato, ctrlLatchFromNavMode = true (impostato PRIMA di ensureInputViewCreated)")
                     } else {
                         ctrlLatchFromNavMode = false
                         Log.d(TAG, "Nav mode: Ctrl latch disattivato, ctrlLatchFromNavMode = false")
@@ -672,7 +713,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                 result.ctrlPhysicallyPressed?.let { ctrlPhysicallyPressed = it }
                 result.lastCtrlReleaseTime?.let { lastCtrlReleaseTime = it }
                 
+                // Aggiorna la status bar PRIMA di mostrare la tastiera
+                updateStatusBarText()
+                
                 if (result.shouldShowKeyboard) {
+                    // Ora che i flag sono impostati, mostra la tastiera
                     ensureInputViewCreated()
                 }
                 if (result.shouldHideKeyboard) {
@@ -681,7 +726,6 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                 
                 if (shouldConsume) {
                     ctrlPressed = true
-                    updateStatusBarText()
                     return true
                 }
             } else if (ctrlLatchActive) {
