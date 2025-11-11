@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.palsoftware.pastiera.inputmethod.KeyboardEventTracker
 import it.palsoftware.pastiera.ui.theme.PastieraTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 
 class MainActivity : ComponentActivity() {
     
@@ -37,15 +39,50 @@ class MainActivity : ComponentActivity() {
     )
     
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Notifica anche gli eventi che arrivano direttamente alla Activity
-        // (come i tasti modificatori che non vengono consumati dal servizio)
-        KeyboardEventTracker.notifyKeyEvent(keyCode, event, "KEY_DOWN")
+        // Notifica solo gli eventi che non sono keycode di output generati dal servizio
+        // I keycode di output (DPAD, TAB, PAGE_UP, PAGE_DOWN, ESCAPE) senza modificatori
+        // sono generati dal servizio e l'evento originale con output è già stato notificato
+        if (event != null) {
+            val isOutputKeyCode = keyCode in listOf(
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_TAB,
+                KeyEvent.KEYCODE_PAGE_UP,
+                KeyEvent.KEYCODE_PAGE_DOWN,
+                KeyEvent.KEYCODE_ESCAPE
+            )
+            val hasModifiers = event.isAltPressed || event.isShiftPressed || event.isCtrlPressed
+            
+            // Ignora i keycode di output senza modificatori (sono generati dal servizio)
+            if (!isOutputKeyCode || hasModifiers) {
+                KeyboardEventTracker.notifyKeyEvent(keyCode, event, "KEY_DOWN")
+            }
+        }
         return super.onKeyDown(keyCode, event)
     }
     
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        // Notifica anche gli eventi che arrivano direttamente alla Activity
-        KeyboardEventTracker.notifyKeyEvent(keyCode, event, "KEY_UP")
+        // Notifica solo gli eventi che non sono keycode di output generati dal servizio
+        if (event != null) {
+            val isOutputKeyCode = keyCode in listOf(
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_TAB,
+                KeyEvent.KEYCODE_PAGE_UP,
+                KeyEvent.KEYCODE_PAGE_DOWN,
+                KeyEvent.KEYCODE_ESCAPE
+            )
+            val hasModifiers = event.isAltPressed || event.isShiftPressed || event.isCtrlPressed
+            
+            // Ignora i keycode di output senza modificatori (sono generati dal servizio)
+            if (!isOutputKeyCode || hasModifiers) {
+                KeyboardEventTracker.notifyKeyEvent(keyCode, event, "KEY_UP")
+            }
+        }
         return super.onKeyUp(keyCode, event)
     }
     
@@ -109,18 +146,13 @@ fun KeyboardSetupScreen(
     activity: MainActivity
 ) {
     val context = LocalContext.current
-    val prefs = remember { 
-        context.getSharedPreferences("pastiera_prefs", Context.MODE_PRIVATE)
-    }
     
     var testText by remember { mutableStateOf("") }
     val lastKeyEventState = remember { mutableStateOf<KeyboardEventTracker.KeyEventInfo?>(null) }
     val lastKeyEvent by lastKeyEventState
     
-    // Carica il valore salvato del long press threshold (default 500ms)
-    var longPressThreshold by remember { 
-        mutableStateOf(prefs.getLong("long_press_threshold", 500L))
-    }
+    // Stato per la navigazione alle impostazioni
+    var showSettings by remember { mutableStateOf(false) }
     
     // Collega lo stato al tracker globale
     LaunchedEffect(Unit) {
@@ -134,6 +166,15 @@ fun KeyboardSetupScreen(
         }
     }
     
+    // Navigazione condizionale
+    if (showSettings) {
+        SettingsScreen(
+            modifier = modifier,
+            onBack = { showSettings = false }
+        )
+        return
+    }
+    
     Column(
         modifier = modifier
             .padding(16.dp)
@@ -141,17 +182,31 @@ fun KeyboardSetupScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Pastiera Keyboard",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Text(
-            text = "Tastiera fisica con supporto long press",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Header con pulsante impostazioni
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Pastiera Keyboard",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Tastiera fisica con supporto long press",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = { showSettings = true }) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Impostazioni"
+                )
+            }
+        }
         
         Divider()
         
@@ -270,6 +325,14 @@ fun KeyboardSetupScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace
                     )
+                    if (event.outputKeyCodeName != null) {
+                        Text(
+                            text = "Output: ${event.outputKeyCodeName}${if (event.outputKeyCode != null) " (${event.outputKeyCode})" else ""}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -338,62 +401,20 @@ fun KeyboardSetupScreen(
             }
         }
         
-        Card(
+        Button(
+            onClick = { showSettings = true },
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary
             )
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Impostazioni",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Text(
-                    text = "Durata Long Press: ${longPressThreshold}ms",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                
-                Slider(
-                    value = longPressThreshold.toFloat(),
-                    onValueChange = { newValue ->
-                        val clampedValue = newValue.toLong().coerceIn(50L, 1000L)
-                        longPressThreshold = clampedValue
-                        // Salva il valore nelle preferenze
-                        prefs.edit().putLong("long_press_threshold", clampedValue).apply()
-                    },
-                    valueRange = 50f..1000f,
-                    steps = 18, // 19 valori (50, 100, 150, ..., 1000)
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "50ms",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "1000ms",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                
-                Text(
-                    text = "Impostazione applicata immediatamente",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Impostazioni")
         }
         
         Button(

@@ -20,7 +20,9 @@ object KeyboardEventTracker {
         val unicodeChar: Int,
         val isAltPressed: Boolean,
         val isShiftPressed: Boolean,
-        val isCtrlPressed: Boolean
+        val isCtrlPressed: Boolean,
+        val outputKeyCode: Int? = null,
+        val outputKeyCodeName: String? = null
     )
     
     fun registerState(state: MutableState<KeyEventInfo?>) {
@@ -31,7 +33,7 @@ object KeyboardEventTracker {
         _keyEventState = null
     }
     
-    fun notifyKeyEvent(keyCode: Int, event: KeyEvent?, action: String) {
+    fun notifyKeyEvent(keyCode: Int, event: KeyEvent?, action: String, outputKeyCode: Int? = null, outputKeyCodeName: String? = null) {
         if (event != null) {
             val keyEventInfo = KeyEventInfo(
                 keyCode = keyCode,
@@ -40,7 +42,9 @@ object KeyboardEventTracker {
                 unicodeChar = event.unicodeChar,
                 isAltPressed = event.isAltPressed,
                 isShiftPressed = event.isShiftPressed,
-                isCtrlPressed = event.isCtrlPressed
+                isCtrlPressed = event.isCtrlPressed,
+                outputKeyCode = outputKeyCode,
+                outputKeyCodeName = outputKeyCodeName
             )
             _keyEventState?.value = keyEventInfo
         }
@@ -78,9 +82,21 @@ object KeyboardEventTracker {
             KeyEvent.KEYCODE_ENTER -> "KEYCODE_ENTER"
             KeyEvent.KEYCODE_DEL -> "KEYCODE_DEL"
             KeyEvent.KEYCODE_BACK -> "KEYCODE_BACK"
+            KeyEvent.KEYCODE_DPAD_UP -> "DPAD_UP"
+            KeyEvent.KEYCODE_DPAD_DOWN -> "DPAD_DOWN"
+            KeyEvent.KEYCODE_DPAD_LEFT -> "DPAD_LEFT"
+            KeyEvent.KEYCODE_DPAD_RIGHT -> "DPAD_RIGHT"
+            KeyEvent.KEYCODE_TAB -> "TAB"
+            KeyEvent.KEYCODE_PAGE_UP -> "PAGE_UP"
+            KeyEvent.KEYCODE_PAGE_DOWN -> "PAGE_DOWN"
+            KeyEvent.KEYCODE_ESCAPE -> "ESCAPE"
             63 -> "KEYCODE_SYM"
             else -> "KEYCODE_$keyCode"
         }
+    }
+    
+    fun getOutputKeyCodeName(keyCode: Int): String {
+        return getKeyCodeName(keyCode)
     }
 }
 

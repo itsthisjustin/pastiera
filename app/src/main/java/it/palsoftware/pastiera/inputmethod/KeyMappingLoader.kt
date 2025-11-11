@@ -139,12 +139,16 @@ object KeyMappingLoader {
             val jsonObject = JSONObject(jsonString)
             val mappingsObject = jsonObject.getJSONObject("mappings")
             
-            // Mappa i nomi dei keycode direzionali alle costanti KeyEvent
-            val dpadKeyCodeMap = mapOf(
+            // Mappa i nomi dei keycode speciali alle costanti KeyEvent
+            val specialKeyCodeMap = mapOf(
                 "DPAD_UP" to KeyEvent.KEYCODE_DPAD_UP,
                 "DPAD_DOWN" to KeyEvent.KEYCODE_DPAD_DOWN,
                 "DPAD_LEFT" to KeyEvent.KEYCODE_DPAD_LEFT,
-                "DPAD_RIGHT" to KeyEvent.KEYCODE_DPAD_RIGHT
+                "DPAD_RIGHT" to KeyEvent.KEYCODE_DPAD_RIGHT,
+                "TAB" to KeyEvent.KEYCODE_TAB,
+                "PAGE_UP" to KeyEvent.KEYCODE_PAGE_UP,
+                "PAGE_DOWN" to KeyEvent.KEYCODE_PAGE_DOWN,
+                "ESCAPE" to KeyEvent.KEYCODE_ESCAPE
             )
             
             val keys = mappingsObject.keys()
@@ -162,8 +166,8 @@ object KeyMappingLoader {
                         }
                         "keycode" -> {
                             val keycodeName = mappingObject.getString("keycode")
-                            val dpadKeyCode = dpadKeyCodeMap[keycodeName]
-                            if (dpadKeyCode != null) {
+                            val mappedKeyCode = specialKeyCodeMap[keycodeName]
+                            if (mappedKeyCode != null) {
                                 ctrlKeyMap[keyCode] = CtrlMapping("keycode", keycodeName)
                             }
                         }

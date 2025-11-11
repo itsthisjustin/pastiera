@@ -53,6 +53,13 @@ object TextSelectionHelper {
                 return false
             }
             
+            // Verifica se possiamo espandere a sinistra
+            // Se selectionStart è già 0, non possiamo espandere ulteriormente
+            if (selectionStart <= 0) {
+                Log.d(TAG, "expandSelectionLeft: selezione già all'inizio del testo, non posso espandere")
+                return false
+            }
+            
             // Ottieni il testo prima del cursore per verificare che ci sia testo
             val textBefore = inputConnection.getTextBeforeCursor(1, 0)
             
@@ -67,11 +74,14 @@ object TextSelectionHelper {
                     newStart = selectionStart - 1
                 }
                 
-                // Assicurati che newStart non sia negativo
-                if (newStart >= 0) {
+                // Assicurati che newStart non sia negativo e che sia diverso da selectionStart
+                if (newStart >= 0 && newStart < selectionStart) {
                     inputConnection.setSelection(newStart, selectionEnd)
                     Log.d(TAG, "expandSelectionLeft: selezione espansa da [$selectionStart, $selectionEnd] a [$newStart, $selectionEnd]")
                     return true
+                } else {
+                    Log.d(TAG, "expandSelectionLeft: impossibile espandere (newStart: $newStart, selectionStart: $selectionStart)")
+                    return false
                 }
             }
         } catch (e: Exception) {
@@ -120,6 +130,16 @@ object TextSelectionHelper {
                 return false
             }
             
+            // Verifica la lunghezza totale del testo
+            val fullText = extractedText.text?.toString() ?: ""
+            val textLength = fullText.length
+            
+            // Se selectionEnd è già alla fine del testo, non possiamo espandere ulteriormente
+            if (selectionEnd >= textLength) {
+                Log.d(TAG, "expandSelectionRight: selezione già alla fine del testo (selectionEnd: $selectionEnd, textLength: $textLength), non posso espandere")
+                return false
+            }
+            
             // Ottieni il testo dopo il cursore per verificare che ci sia testo
             val textAfter = inputConnection.getTextAfterCursor(1, 0)
             
@@ -134,12 +154,14 @@ object TextSelectionHelper {
                     newEnd = selectionEnd + 1
                 }
                 
-                // Verifica che newEnd non superi la lunghezza del testo
-                val fullText = extractedText.text?.toString() ?: ""
-                if (newEnd <= fullText.length) {
+                // Verifica che newEnd non superi la lunghezza del testo e che sia diverso da selectionEnd
+                if (newEnd <= textLength && newEnd > selectionEnd) {
                     inputConnection.setSelection(selectionStart, newEnd)
                     Log.d(TAG, "expandSelectionRight: selezione espansa da [$selectionStart, $selectionEnd] a [$selectionStart, $newEnd]")
                     return true
+                } else {
+                    Log.d(TAG, "expandSelectionRight: impossibile espandere (newEnd: $newEnd, selectionEnd: $selectionEnd, textLength: $textLength)")
+                    return false
                 }
             }
         } catch (e: Exception) {

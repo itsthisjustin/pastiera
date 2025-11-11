@@ -2,22 +2,14 @@ package it.palsoftware.pastiera.inputmethod
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.graphics.Color
+import it.palsoftware.pastiera.SettingsManager
 import android.inputmethodservice.InputMethodService
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.view.ViewGroup
-import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
-import android.widget.LinearLayout
-import android.widget.TextView
 import it.palsoftware.pastiera.inputmethod.KeyboardEventTracker
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Servizio di immissione specializzato per tastiere fisiche.
@@ -29,38 +21,17 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         private const val TAG = "PastieraInputMethod"
     }
 
-    // Mappa per tracciare i tasti premuti e il tempo di pressione
-    private val pressedKeys = ConcurrentHashMap<Int, Long>()
-    
-    // Mappa per tracciare i Runnable dei long press in attesa
-    private val longPressRunnables = ConcurrentHashMap<Int, Runnable>()
-    
-    // Mappa per tracciare se un long press è stato attivato
-    private val longPressActivated = ConcurrentHashMap<Int, Boolean>()
-    
-    // Mappa per tracciare i caratteri normali inseriti (per poterli cancellare in caso di long press)
-    private val insertedNormalChars = ConcurrentHashMap<Int, String>()
-    
-    // Handler per gestire i long press
-    private val handler = Handler(Looper.getMainLooper())
-    
-    // Soglia per considerare un long press (in millisecondi) - caricata dalle preferenze
-    private var longPressThreshold: Long = 500L
-    
     // SharedPreferences per le impostazioni
     private lateinit var prefs: SharedPreferences
-    
+
+    private lateinit var altSymManager: AltSymManager
+    private lateinit var statusBarController: StatusBarController
+
     // Keycode per il tasto SYM
     private val KEYCODE_SYM = 63
     
     // Stato per tracciare se SYM è attualmente attivo (latch/toggle)
     private var symKeyActive = false
-    
-    // Mappatura Alt+tasto -> carattere speciale (caricata da JSON)
-    private val altKeyMap = mutableMapOf<Int, String>()
-    
-    // Mappatura SYM+tasto -> emoji (caricata da JSON)
-    private val symKeyMap = mutableMapOf<Int, String>()
     
     // Mappatura Ctrl+tasto -> azione o keycode (caricata da JSON)
     private val ctrlKeyMap = mutableMapOf<Int, KeyMappingLoader.CtrlMapping>()
@@ -94,126 +65,31 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     
     private val DOUBLE_TAP_THRESHOLD = 500L // millisecondi
     
-    // Riferimento alla status bar per aggiornare l'icona Caps Lock
-    private var statusBarTextView: TextView? = null
-    private var statusBarLayout: LinearLayout? = null
-    private var emojiMapTextView: TextView? = null
-    
     // Flag per tracciare se siamo in un contesto di input valido
     private var isInputViewActive = false
+
+    private fun refreshStatusBar() {
+        updateStatusBarText()
+    }
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate() chiamato")
         prefs = getSharedPreferences("pastiera_prefs", Context.MODE_PRIVATE)
-        loadLongPressThreshold()
-        altKeyMap.putAll(KeyMappingLoader.loadAltKeyMappings(assets))
-        symKeyMap.putAll(KeyMappingLoader.loadSymKeyMappings(assets))
+        statusBarController = StatusBarController(this)
+        altSymManager = AltSymManager(assets, prefs)
         ctrlKeyMap.putAll(KeyMappingLoader.loadCtrlKeyMappings(assets))
         Log.d(TAG, "onCreate() completato")
     }
-    
-    /**
-     * Carica la soglia del long press dalle preferenze.
-     */
-    private fun loadLongPressThreshold() {
-        longPressThreshold = prefs.getLong("long_press_threshold", 500L).coerceIn(50L, 1000L)
-    }
 
     override fun onCreateInputView(): View? {
-        Log.d(TAG, "onCreateInputView() chiamato - statusBarLayout è null: ${statusBarLayout == null}")
-        // Crea una barra di stato che mostra "Pastiera attiva"
-        statusBarLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setBackgroundColor(Color.parseColor("#2196F3")) // Blu Material
-        }
-        
-        statusBarTextView = TextView(this).apply {
-            updateStatusBarText()
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(16, 12, 16, 12)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
-        
-        statusBarLayout?.addView(statusBarTextView)
-        
-        // TextView per la mappa emoji (inizialmente nascosto)
-        emojiMapTextView = TextView(this).apply {
-            text = buildEmojiMapText()
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(16, 8, 16, 12)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            visibility = View.GONE
-        }
-        
-        statusBarLayout?.addView(emojiMapTextView)
-        
-        updateStatusBarLayout()
-        
-        Log.d(TAG, "onCreateInputView() completato - view creata: ${statusBarLayout != null}")
-        return statusBarLayout
+        Log.d(TAG, "onCreateInputView() chiamato")
+        val layout = statusBarController.getOrCreateLayout(altSymManager.buildEmojiMapText())
+        refreshStatusBar()
+        Log.d(TAG, "onCreateInputView() completato - view creata: ${layout != null}")
+        return layout
     }
-    
-    /**
-     * Costruisce il testo della mappa emoji da mostrare nella status bar.
-     */
-    private fun buildEmojiMapText(): String {
-        val keyLabels = mapOf(
-            KeyEvent.KEYCODE_Q to "Q", KeyEvent.KEYCODE_W to "W", KeyEvent.KEYCODE_E to "E",
-            KeyEvent.KEYCODE_R to "R", KeyEvent.KEYCODE_T to "T", KeyEvent.KEYCODE_Y to "Y",
-            KeyEvent.KEYCODE_U to "U", KeyEvent.KEYCODE_I to "I", KeyEvent.KEYCODE_O to "O",
-            KeyEvent.KEYCODE_P to "P", KeyEvent.KEYCODE_A to "A", KeyEvent.KEYCODE_S to "S",
-            KeyEvent.KEYCODE_D to "D", KeyEvent.KEYCODE_F to "F", KeyEvent.KEYCODE_G to "G",
-            KeyEvent.KEYCODE_H to "H", KeyEvent.KEYCODE_J to "J", KeyEvent.KEYCODE_K to "K",
-            KeyEvent.KEYCODE_L to "L", KeyEvent.KEYCODE_Z to "Z", KeyEvent.KEYCODE_X to "X",
-            KeyEvent.KEYCODE_C to "C", KeyEvent.KEYCODE_V to "V", KeyEvent.KEYCODE_B to "B",
-            KeyEvent.KEYCODE_N to "N", KeyEvent.KEYCODE_M to "M"
-        )
-        
-        val rows = mutableListOf<String>()
-        val keys = listOf(
-            listOf(KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_W, KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_R, KeyEvent.KEYCODE_T, KeyEvent.KEYCODE_Y, KeyEvent.KEYCODE_U, KeyEvent.KEYCODE_I, KeyEvent.KEYCODE_O, KeyEvent.KEYCODE_P),
-            listOf(KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_S, KeyEvent.KEYCODE_D, KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_G, KeyEvent.KEYCODE_H, KeyEvent.KEYCODE_J, KeyEvent.KEYCODE_K, KeyEvent.KEYCODE_L),
-            listOf(KeyEvent.KEYCODE_Z, KeyEvent.KEYCODE_X, KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_V, KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_N, KeyEvent.KEYCODE_M)
-        )
-        
-        for (row in keys) {
-            val rowText = row.joinToString("  ") { keyCode ->
-                val label = keyLabels[keyCode] ?: ""
-                val emoji = symKeyMap[keyCode] ?: ""
-                "$label:$emoji"
-            }
-            rows.add(rowText)
-        }
-        
-        return rows.joinToString("\n")
-    }
-    
-    /**
-     * Aggiorna il layout della status bar per mostrare/nascondere la mappa emoji.
-     */
-    private fun updateStatusBarLayout() {
-        if (symKeyActive) {
-            emojiMapTextView?.visibility = View.VISIBLE
-        } else {
-            emojiMapTextView?.visibility = View.GONE
-        }
-    }
-    
+
     // Flag per tracciare se Ctrl latch è stato attivato nel nav mode (anche quando si entra in un campo di testo)
     private var ctrlLatchFromNavMode = false
     
@@ -277,15 +153,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         lastCtrlReleaseTime = 0
         lastAltReleaseTime = 0
         
-        // Cancella tutti i long press in attesa
-        longPressRunnables.values.forEach { handler.removeCallbacks(it) }
-        longPressRunnables.clear()
-        pressedKeys.clear()
-        longPressActivated.clear()
-        insertedNormalChars.clear()
+        // Reset stato Alt/SYM
+        altSymManager.resetTransientState()
         
         // Aggiorna la status bar
-        updateStatusBarText()
+        refreshStatusBar()
     }
     
     /**
@@ -294,7 +166,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
      * Mostra la tastiera se c'è un campo di testo attivo o se Ctrl latch è attivo (nav mode).
      */
     private fun ensureInputViewCreated() {
-        Log.d(TAG, "ensureInputViewCreated() chiamato - statusBarLayout è null: ${statusBarLayout == null}, isInputViewActive: $isInputViewActive, ctrlLatchActive: $ctrlLatchActive")
+        Log.d(TAG, "ensureInputViewCreated() chiamato - isInputViewActive: $isInputViewActive, ctrlLatchActive: $ctrlLatchActive")
         
         // Eccezione per nav mode: mostra la tastiera se Ctrl latch è attivo
         val shouldShow = isInputViewActive || ctrlLatchActive
@@ -312,41 +184,16 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             return
         }
         
-        // Se la view non esiste, creala
-        if (statusBarLayout == null) {
-            Log.d(TAG, "Creazione della view...")
-            val newView = onCreateInputView()
-            Log.d(TAG, "View creata: ${newView != null}")
-            if (newView != null) {
-                Log.d(TAG, "Chiamata setInputView()...")
-                setInputView(newView)
-                Log.d(TAG, "Chiamata requestShowSelf() per forzare la visualizzazione...")
-                requestShowSelf(0)
-                Log.d(TAG, "ensureInputViewCreated() completato")
-            } else {
-                Log.w(TAG, "View è null, non posso chiamare setInputView()")
-            }
-        } else {
-            // View già esistente: controlla se ha già un parent
-            val hasParent = statusBarLayout?.parent != null
-            Log.d(TAG, "View già esistente, hasParent: $hasParent")
-            
-            // Aggiorna sempre il testo della status bar quando viene mostrata
-            updateStatusBarText()
-            
-            if (!hasParent) {
-                // La view esiste ma non è ancora impostata, impostala
-                Log.d(TAG, "Chiamata setInputView() per view esistente senza parent...")
-                setInputView(statusBarLayout)
-            } else {
-                Log.d(TAG, "View ha già un parent, non chiamo setInputView()")
-            }
-            
-            // Forza la visualizzazione con requestShowSelf() solo se c'è un input connection
-            Log.d(TAG, "Chiamata requestShowSelf() per forzare la visualizzazione...")
-            requestShowSelf(0)
-            Log.d(TAG, "ensureInputViewCreated() completato")
+        val layout = statusBarController.getOrCreateLayout(altSymManager.buildEmojiMapText())
+        refreshStatusBar()
+
+        if (layout.parent == null) {
+            Log.d(TAG, "ensureInputViewCreated() - setInputView() su nuova layout")
+            setInputView(layout)
         }
+
+        Log.d(TAG, "ensureInputViewCreated() - requestShowSelf()")
+        requestShowSelf(0)
     }
     
     
@@ -413,77 +260,23 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     }
     
     /**
-     * Aggiorna il testo della status bar per mostrare lo stato dei tasti modificatori.
-     * Mostra minuscolo quando premuti fisicamente, maiuscolo quando in latch.
-     * Se siamo in nav mode, mostra "NAV MODE" invece del testo normale.
+     * Aggiorna la status bar delegando al controller dedicato.
      */
     private fun updateStatusBarText() {
-        // Se siamo in nav mode, mostra "NAV MODE" come testo separato
-        if (ctrlLatchFromNavMode && ctrlLatchActive) {
-            statusBarTextView?.text = "NAV MODE"
-            // Aggiorna lo stile per nav mode: nero semi-trasparente e più basso
-            // Usa Color.argb() per creare un nero con alpha 200 (circa 78% opaco)
-            statusBarLayout?.setBackgroundColor(Color.argb(100, 0, 0, 0))
-            statusBarTextView?.setPadding(16, 6, 16, 6) // Padding ridotto per renderla più bassa
-            statusBarTextView?.textSize = 10f // Testo leggermente più piccolo
-            updateStatusBarLayout()
-            return
-        }
-        
-        // Reset dello stile normale quando non siamo in nav mode
-        statusBarLayout?.setBackgroundColor(Color.parseColor("#2196F3")) // Blu Material
-        statusBarTextView?.setPadding(16, 12, 16, 12) // Padding normale
-        statusBarTextView?.textSize = 14f // Testo normale
-        
-        val statusParts = mutableListOf<String>()
-        
-        // Caps Lock (Shift latch) - mostra sempre 🔒 quando attivo
-        if (capsLockEnabled) {
-            statusParts.add("🔒")
-        }
-        
-        // SYM key
-        if (symKeyActive) {
-            statusParts.add("🔣")
-        }
-        
-        // Shift: minuscolo se premuto fisicamente, maiuscolo se in latch (Caps Lock), minuscolo se one-shot
-        if (capsLockEnabled) {
-            statusParts.add("SHIFT")
-        } else if (shiftPhysicallyPressed) {
-            statusParts.add("shift")
-        } else if (shiftOneShot) {
-            statusParts.add("shift")
-        }
-        
-        // Ctrl: minuscolo se premuto fisicamente, maiuscolo se in latch, minuscolo se one-shot
-        // NON mostrare Ctrl se siamo in nav mode (mostriamo "NAV MODE" invece)
-        if (!ctrlLatchFromNavMode) {
-            if (ctrlLatchActive) {
-                statusParts.add("CTRL")
-            } else if (ctrlPhysicallyPressed) {
-                statusParts.add("ctrl")
-            } else if (ctrlOneShot) {
-                statusParts.add("ctrl")
-            }
-        }
-        
-        // Alt: minuscolo se premuto fisicamente, maiuscolo se in latch, minuscolo se one-shot
-        if (altLatchActive) {
-            statusParts.add("ALT")
-        } else if (altPhysicallyPressed) {
-            statusParts.add("alt")
-        } else if (altOneShot) {
-            statusParts.add("alt")
-        }
-        
-        val status = if (statusParts.isNotEmpty()) {
-            "${statusParts.joinToString(" ")} Pastiera attiva"
-        } else {
-            "Pastiera attiva"
-        }
-        statusBarTextView?.text = status
-        updateStatusBarLayout()
+        val snapshot = StatusBarController.StatusSnapshot(
+            capsLockEnabled = capsLockEnabled,
+            shiftPhysicallyPressed = shiftPhysicallyPressed,
+            shiftOneShot = shiftOneShot,
+            ctrlLatchActive = ctrlLatchActive,
+            ctrlPhysicallyPressed = ctrlPhysicallyPressed,
+            ctrlOneShot = ctrlOneShot,
+            ctrlLatchFromNavMode = ctrlLatchFromNavMode,
+            altLatchActive = altLatchActive,
+            altPhysicallyPressed = altPhysicallyPressed,
+            altOneShot = altOneShot,
+            symKeyActive = symKeyActive
+        )
+        statusBarController.update(snapshot)
     }
     
 
@@ -556,7 +349,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        Log.d(TAG, "onStartInputView() chiamato - restarting: $restarting, statusBarLayout: ${statusBarLayout != null}, ctrlLatchFromNavMode: $ctrlLatchFromNavMode")
+        Log.d(TAG, "onStartInputView() chiamato - restarting: $restarting, ctrlLatchFromNavMode: $ctrlLatchFromNavMode")
         
         // Verifica se il campo è effettivamente editabile
         val isEditable = info?.let { editorInfo ->
@@ -607,15 +400,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             // Siamo in nav mode e non c'è un campo editabile - mantieni isInputViewActive = false
             isInputViewActive = false
         }
-        // Ricarica la soglia del long press (potrebbe essere cambiata nelle impostazioni)
-        loadLongPressThreshold()
-        // Reset dello stato quando si inizia a inserire testo
-        pressedKeys.clear()
-        longPressActivated.clear()
-        insertedNormalChars.clear()
-        // Cancella tutti i long press in attesa
-        longPressRunnables.values.forEach { handler.removeCallbacks(it) }
-        longPressRunnables.clear()
+        // Ricarica eventuali impostazioni relative all'Alt manager
+        altSymManager.reloadLongPressThreshold()
+        altSymManager.resetTransientState()
     }
     
     override fun onFinishInput() {
@@ -659,7 +446,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         val inputConnection = currentInputConnection ?: return super.onKeyLongPress(keyCode, event)
         
         // Intercetta i long press PRIMA che Android li gestisca
-        if (altKeyMap.containsKey(keyCode)) {
+        if (altSymManager.hasAltMapping(keyCode)) {
             // Consumiamo l'evento per evitare il popup di Android
             return true
         }
@@ -739,7 +526,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         
         val inputConnection = currentInputConnection ?: return super.onKeyDown(keyCode, event)
         
-        Log.d(TAG, "onKeyDown() - keyCode: $keyCode, statusBarLayout: ${statusBarLayout != null}, inputConnection: ${inputConnection != null}")
+        Log.d(TAG, "onKeyDown() - keyCode: $keyCode, inputConnection: ${inputConnection != null}")
         
         // Notifica sempre l'evento al tracker (anche se viene consumato)
         KeyboardEventTracker.notifyKeyEvent(keyCode, event, "KEY_DOWN")
@@ -768,13 +555,13 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                         shiftOneShot = false
                         capsLockEnabled = true
                         Log.d(TAG, "Shift doppio tap: one-shot -> Caps Lock")
-                        updateStatusBarText()
+                        refreshStatusBar()
                         lastShiftReleaseTime = 0 // Reset per evitare triple tap
                     } else {
                         // Singolo tap mentre one-shot è attivo - disattiva one-shot
                         shiftOneShot = false
                         Log.d(TAG, "Shift one-shot disattivato")
-                        updateStatusBarText()
+                        refreshStatusBar()
                         lastShiftReleaseTime = 0 // Reset per evitare attivazioni indesiderate
                     }
                 } else {
@@ -927,7 +714,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         }
         
         // Se il tasto è già premuto, consumiamo l'evento per evitare ripetizioni e popup
-        if (pressedKeys.containsKey(keyCode)) {
+        if (altSymManager.hasPendingPress(keyCode)) {
             return true
         }
         
@@ -952,14 +739,30 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                         // Gestisci azioni speciali personalizzate
                         when (ctrlMapping.value) {
                             "expand_selection_left" -> {
-                                if (TextSelectionHelper.expandSelectionLeft(inputConnection)) {
-                                    return true
-                                }
+                                // Tenta di espandere la selezione a sinistra
+                                // Consumiamo sempre l'evento per evitare che il carattere 'W' venga inserito
+                                KeyboardEventTracker.notifyKeyEvent(
+                                    keyCode,
+                                    event,
+                                    "KEY_DOWN",
+                                    outputKeyCode = null,
+                                    outputKeyCodeName = "expand_selection_left"
+                                )
+                                TextSelectionHelper.expandSelectionLeft(inputConnection)
+                                return true
                             }
                             "expand_selection_right" -> {
-                                if (TextSelectionHelper.expandSelectionRight(inputConnection)) {
-                                    return true
-                                }
+                                // Tenta di espandere la selezione a destra
+                                // Consumiamo sempre l'evento per evitare che il carattere 'R' venga inserito
+                                KeyboardEventTracker.notifyKeyEvent(
+                                    keyCode,
+                                    event,
+                                    "KEY_DOWN",
+                                    outputKeyCode = null,
+                                    outputKeyCodeName = "expand_selection_right"
+                                )
+                                TextSelectionHelper.expandSelectionRight(inputConnection)
+                                return true
                             }
                             else -> {
                                 // Esegui l'azione del context menu standard
@@ -972,47 +775,102 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                                     else -> null
                                 }
                                 if (actionId != null) {
+                                    // Notifica l'evento con il nome dell'azione
+                                    KeyboardEventTracker.notifyKeyEvent(
+                                        keyCode,
+                                        event,
+                                        "KEY_DOWN",
+                                        outputKeyCode = null,
+                                        outputKeyCodeName = ctrlMapping.value
+                                    )
                                     inputConnection.performContextMenuAction(actionId)
+                                    return true
+                                } else {
+                                    // Azione non riconosciuta, consuma l'evento per evitare inserimento carattere
+                                    Log.d(TAG, "Ctrl+azione non riconosciuta: ${ctrlMapping.value}, evento consumato")
                                     return true
                                 }
                             }
                         }
                     }
                     "keycode" -> {
-                        // Invia il keycode direzionale
-                        val dpadKeyCode = when (ctrlMapping.value) {
+                        // Invia il keycode mappato
+                        val mappedKeyCode = when (ctrlMapping.value) {
                             "DPAD_UP" -> KeyEvent.KEYCODE_DPAD_UP
                             "DPAD_DOWN" -> KeyEvent.KEYCODE_DPAD_DOWN
                             "DPAD_LEFT" -> KeyEvent.KEYCODE_DPAD_LEFT
                             "DPAD_RIGHT" -> KeyEvent.KEYCODE_DPAD_RIGHT
+                            "TAB" -> KeyEvent.KEYCODE_TAB
+                            "PAGE_UP" -> KeyEvent.KEYCODE_PAGE_UP
+                            "PAGE_DOWN" -> KeyEvent.KEYCODE_PAGE_DOWN
+                            "ESCAPE" -> KeyEvent.KEYCODE_ESCAPE
                             else -> null
                         }
-                        if (dpadKeyCode != null) {
-                            inputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, dpadKeyCode))
-                            inputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, dpadKeyCode))
+                        if (mappedKeyCode != null) {
+                            // Notifica l'evento con il keycode di output
+                            KeyboardEventTracker.notifyKeyEvent(
+                                keyCode,
+                                event,
+                                "KEY_DOWN",
+                                outputKeyCode = mappedKeyCode,
+                                outputKeyCodeName = KeyboardEventTracker.getOutputKeyCodeName(mappedKeyCode)
+                            )
+                            inputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, mappedKeyCode))
+                            inputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, mappedKeyCode))
+                            return true
+                        } else {
+                            // Keycode non riconosciuto, consuma l'evento per evitare inserimento carattere
+                            Log.d(TAG, "Ctrl+keycode non riconosciuto: ${ctrlMapping.value}, evento consumato")
                             return true
                         }
                     }
                 }
+            } else {
+                // Ctrl è premuto ma il tasto non ha una mappatura valida
+                // Gestione speciale per Backspace: cancella l'ultima parola
+                if (keyCode == KeyEvent.KEYCODE_DEL) {
+                    // Ctrl+Backspace cancella l'ultima parola
+                    KeyboardEventTracker.notifyKeyEvent(
+                        keyCode,
+                        event,
+                        "KEY_DOWN",
+                        outputKeyCode = null,
+                        outputKeyCodeName = "delete_last_word"
+                    )
+                    TextSelectionHelper.deleteLastWord(inputConnection)
+                    return true
+                }
+                // Eccezione per Enter: continua a funzionare normalmente
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    // Lascia passare Enter anche con Ctrl premuto
+                    Log.d(TAG, "Ctrl+Enter senza mappatura, passo l'evento ad Android")
+                    return super.onKeyDown(keyCode, event)
+                }
+                // Per tutti gli altri tasti senza mappatura, consumiamo l'evento
+                Log.d(TAG, "Ctrl+tasto senza mappatura (keyCode: $keyCode), evento consumato")
+                return true
             }
         }
         
         // Se Alt è premuto o Alt latch è attivo o Alt one-shot, gestisci la combinazione Alt+tasto
         if (event?.isAltPressed == true || altLatchActive || altOneShot) {
-            // Cancella eventuali long press in attesa per questo tasto
-            longPressRunnables[keyCode]?.let { handler.removeCallbacks(it) }
-            longPressRunnables.remove(keyCode)
-            // Se era one-shot, disattivalo dopo l'uso
+            altSymManager.cancelPendingLongPress(keyCode)
             if (altOneShot) {
                 altOneShot = false
-                updateStatusBarText()
+                refreshStatusBar()
             }
-            return handleAltKey(keyCode, inputConnection, event)
+            return altSymManager.handleAltCombination(
+                keyCode,
+                inputConnection,
+                event
+            ) { defaultKeyCode, defaultEvent ->
+                super.onKeyDown(defaultKeyCode, defaultEvent)
+            }
         }
         
         // Se SYM è attivo, controlla prima la mappa SYM
         if (symKeyActive) {
-            val symChar = symKeyMap[keyCode]
+            val symChar = altSymManager.getSymMappings()[keyCode]
             if (symChar != null) {
                 // Inserisci l'emoji dalla mappa SYM
                 inputConnection.commitText(symChar, 1)
@@ -1036,41 +894,37 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             }
         }
         
-        // Controlla se questo tasto ha una mappatura Alt
-        val hasAltMapping = altKeyMap.containsKey(keyCode)
+        // Gestisci auto-maiuscola per la prima lettera (dopo Shift one-shot, prima delle mappature Alt)
+        if (event != null && event.unicodeChar != 0 && !event.isShiftPressed && !capsLockEnabled) {
+            val char = event.unicodeChar.toChar().toString()
+            if (char.isNotEmpty() && char[0].isLetter() && char[0].isLowerCase()) {
+                // Controlla se l'auto-maiuscola è abilitata
+                val autoCapitalizeEnabled = SettingsManager.getAutoCapitalizeFirstLetter(this)
+                if (autoCapitalizeEnabled) {
+                    // Controlla se il testo prima del cursore è vuoto o contiene solo spazi
+                    val textBeforeCursor = inputConnection.getTextBeforeCursor(1000, 0)
+                    if (textBeforeCursor != null) {
+                        val trimmedText = textBeforeCursor.trim()
+                        // Se il testo prima del cursore è vuoto o contiene solo spazi, è la prima lettera
+                        if (trimmedText.isEmpty()) {
+                            Log.d(TAG, "Auto-maiuscola: prima lettera rilevata, carattere: $char")
+                            val capitalizedChar = char.uppercase()
+                            inputConnection.commitText(capitalizedChar, 1)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
         
-        if (hasAltMapping) {
-            
-            // Consumiamo l'evento per evitare che Android mostri il popup
-            // Registra il tempo di pressione del tasto
-            pressedKeys[keyCode] = System.currentTimeMillis()
-            longPressActivated[keyCode] = false
-            
-            // Inserisci SUBITO il carattere normale a schermo
-            var normalChar = if (event != null && event.unicodeChar != 0) {
-                event.unicodeChar.toChar().toString()
-            } else {
-                ""
-            }
-            
-            // Applica Caps Lock se attivo (ma solo se Shift non è premuto)
-            if (normalChar.isNotEmpty() && capsLockEnabled && event?.isShiftPressed != true) {
-                // Se Caps Lock è attivo e Shift non è premuto, rendi maiuscolo
-                normalChar = normalChar.uppercase()
-            } else if (normalChar.isNotEmpty() && capsLockEnabled && event?.isShiftPressed == true) {
-                // Se Caps Lock è attivo e Shift è premuto, rendi minuscolo (comportamento standard)
-                normalChar = normalChar.lowercase()
-            }
-            
-            if (normalChar.isNotEmpty()) {
-                inputConnection.commitText(normalChar, 1)
-                insertedNormalChars[keyCode] = normalChar
-            }
-            
-            // Gestisci il long press per simulare Alt+tasto
-            scheduleLongPress(keyCode, inputConnection)
-            
-            // Consumiamo l'evento per evitare il popup standard di Android
+        // Controlla se questo tasto ha una mappatura Alt
+        if (altSymManager.hasAltMapping(keyCode)) {
+            altSymManager.handleKeyWithAltMapping(
+                keyCode,
+                event,
+                capsLockEnabled,
+                inputConnection
+            )
             return true
         }
         
@@ -1171,119 +1025,25 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             return true
         }
         
-        val pressStartTime = pressedKeys.remove(keyCode)
-        
-        // Controlla PRIMA se è stato un long press (prima di rimuovere dalla mappa)
-        val wasLongPress = longPressActivated.containsKey(keyCode)
-        if (wasLongPress) {
-            // Rimuovi dalla mappa dopo aver controllato
-            longPressActivated.remove(keyCode)
-        }
-        
-        val insertedChar = insertedNormalChars.remove(keyCode)
-        
-        // Cancella il long press in attesa per questo tasto
-        val longPressRunnable = longPressRunnables.remove(keyCode)
-        longPressRunnable?.let { handler.removeCallbacks(it) }
-        
-        // Se il tasto ha una mappatura Alt e abbiamo gestito l'evento in onKeyDown
-        // Ma solo se SYM non era attivo (perché se SYM era attivo, abbiamo già inserito l'emoji)
-        if (pressStartTime != null && altKeyMap.containsKey(keyCode) && !symKeyActive) {
-            // Consumiamo sempre l'evento per evitare il popup
-            if (wasLongPress) {
-                // È stato un long press, il carattere normale è già stato cancellato
-                // e il carattere Alt è già stato inserito nel Runnable
-                // Non fare nulla
-                return true
-            } else {
-                // Pressione normale, il carattere normale è già stato inserito in onKeyDown
-                // Non fare nulla
-                return true
-            }
+        if (altSymManager.handleKeyUp(keyCode, symKeyActive)) {
+            return true
         }
         
         return super.onKeyUp(keyCode, event)
     }
 
     /**
-     * Gestisce la combinazione Alt+tasto premuta fisicamente.
-     */
-    private fun handleAltKey(
-        keyCode: Int,
-        inputConnection: InputConnection,
-        event: KeyEvent?
-    ): Boolean {
-        val altChar = altKeyMap[keyCode]
-        
-        if (altChar != null) {
-            // Invia il carattere speciale corrispondente ad Alt+tasto
-            inputConnection.commitText(altChar, 1)
-            return true
-        }
-        
-        // Se non c'è una mappatura, lascia che il sistema gestisca il tasto
-        return super.onKeyDown(keyCode, event)
-    }
-
-    /**
-     * Programma il controllo del long press per simulare Alt+tasto.
-     */
-    private fun scheduleLongPress(
-        keyCode: Int,
-        inputConnection: InputConnection
-    ) {
-        // Ricarica sempre il valore dalle preferenze per applicare le modifiche immediatamente
-        loadLongPressThreshold()
-        
-        // Crea un Runnable per gestire il long press
-        val longPressRunnable = Runnable {
-            // Se il tasto è ancora premuto dopo il threshold, è un long press
-            if (pressedKeys.containsKey(keyCode)) {
-                val altChar = altKeyMap[keyCode]
-                val insertedChar = insertedNormalChars[keyCode]
-                
-                if (altChar != null) {
-                    // Segna che il long press è stato attivato
-                    longPressActivated[keyCode] = true
-                    
-                    // Cancella il carattere normale che è stato inserito in onKeyDown
-                    if (insertedChar != null && insertedChar.isNotEmpty()) {
-                        // Cancella il carattere normale (backspace)
-                        inputConnection.deleteSurroundingText(1, 0)
-                    }
-                    
-                    // Inserisci il carattere Alt+tasto
-                    inputConnection.commitText(altChar, 1)
-                    
-                    // Rimuovi il carattere normale dalla mappa
-                    insertedNormalChars.remove(keyCode)
-                    
-                    // Rimuovi anche il Runnable dalla mappa
-                    longPressRunnables.remove(keyCode)
-                }
-            }
-        }
-        
-        // Salva il Runnable per poterlo cancellare se necessario
-        longPressRunnables[keyCode] = longPressRunnable
-        
-        // Programma l'esecuzione dopo il threshold (usa il valore dalle preferenze)
-        handler.postDelayed(longPressRunnable, longPressThreshold)
-    }
-
-    
-    /**
      * Aggiunge una nuova mappatura Alt+tasto -> carattere.
      */
     fun addAltKeyMapping(keyCode: Int, character: String) {
-        altKeyMap[keyCode] = character
+        altSymManager.addAltKeyMapping(keyCode, character)
     }
 
     /**
      * Rimuove una mappatura Alt+tasto esistente.
      */
     fun removeAltKeyMapping(keyCode: Int) {
-        altKeyMap.remove(keyCode)
+        altSymManager.removeAltKeyMapping(keyCode)
     }
 }
 

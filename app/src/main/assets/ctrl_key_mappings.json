@@ -1,7 +1,8 @@
 {
   "mappings": {
     "KEYCODE_Q": {
-      "type": "none"
+      "type": "keycode",
+      "keycode": "ESCAPE"
     },
     "KEYCODE_W": {
       "type": "action",
@@ -16,10 +17,12 @@
       "action": "expand_selection_right"
     },
     "KEYCODE_T": {
-      "type": "none"
+      "type": "keycode",
+      "keycode": "TAB"
     },
     "KEYCODE_Y": {
-      "type": "none"
+      "type": "keycode",
+      "keycode": "PAGE_UP"
     },
     "KEYCODE_U": {
       "type": "none"
@@ -53,7 +56,8 @@
       "type": "none"
     },
     "KEYCODE_H": {
-      "type": "none"
+      "type": "keycode",
+      "keycode": "PAGE_DOWN"
     },
     "KEYCODE_J": {
       "type": "none"
