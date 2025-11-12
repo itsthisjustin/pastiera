@@ -76,6 +76,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     
     private val DOUBLE_TAP_THRESHOLD = 500L // millisecondi
     
+    // Tracciamento doppio tap su spazio per inserire punto e spazio
+    private var lastSpacePressTime: Long = 0
+    
     // Flag per tracciare se siamo in un contesto di input valido
     private var isInputViewActive = false
     
@@ -533,22 +536,37 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                 }
                 
                 // Gestisci auto-capitalize: attiva shiftOneShot se il campo è vuoto
+                // MA: disabilita per i campi password anche se l'autocapitalize è attivo
                 val autoCapitalizeEnabled = SettingsManager.getAutoCapitalizeFirstLetter(this)
                 if (autoCapitalizeEnabled) {
-                    val inputConnection = currentInputConnection
-                    if (inputConnection != null) {
-                        // Controlla se il campo è vuoto
-                        val textBeforeCursor = inputConnection.getTextBeforeCursor(1000, 0)
-                        val textAfterCursor = inputConnection.getTextAfterCursor(1000, 0)
-                        val isFieldEmpty = (textBeforeCursor == null || textBeforeCursor.trim().isEmpty()) &&
-                                          (textAfterCursor == null || textAfterCursor.trim().isEmpty())
-                        
-                        if (isFieldEmpty) {
-                            // Attiva shiftOneShot per la prima lettera
-                            shiftOneShot = true
-                            Log.d(TAG, "Auto-capitalize: campo vuoto rilevato, shiftOneShot attivato")
-                            updateStatusBarText() // Aggiorna per mostrare "shift"
+                    // Verifica se il campo è un campo password
+                    val isPasswordField = info?.let { editorInfo ->
+                        val inputType = editorInfo.inputType
+                        val inputVariation = inputType and android.text.InputType.TYPE_MASK_VARIATION
+                        inputVariation == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                        inputVariation == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                        inputVariation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                    } ?: false
+                    
+                    // Non applicare autocapitalize ai campi password
+                    if (!isPasswordField) {
+                        val inputConnection = currentInputConnection
+                        if (inputConnection != null) {
+                            // Controlla se il campo è vuoto
+                            val textBeforeCursor = inputConnection.getTextBeforeCursor(1000, 0)
+                            val textAfterCursor = inputConnection.getTextAfterCursor(1000, 0)
+                            val isFieldEmpty = (textBeforeCursor == null || textBeforeCursor.trim().isEmpty()) &&
+                                              (textAfterCursor == null || textAfterCursor.trim().isEmpty())
+                            
+                            if (isFieldEmpty) {
+                                // Attiva shiftOneShot per la prima lettera
+                                shiftOneShot = true
+                                Log.d(TAG, "Auto-capitalize: campo vuoto rilevato, shiftOneShot attivato")
+                                updateStatusBarText() // Aggiorna per mostrare "shift"
+                            }
                         }
+                    } else {
+                        Log.d(TAG, "Auto-capitalize: campo password rilevato, autocapitalize disabilitato")
                     }
                 }
             } else {
@@ -772,10 +790,103 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             }
         }
         
+        // GESTISCI DOPPIO TAP SPAZIO PER INSERIRE PUNTO E SPAZIO (PRIMA dell'auto-correzione)
+        val isSpace = keyCode == KeyEvent.KEYCODE_SPACE
+        if (isSpace) {
+            val doubleSpaceToPeriodEnabled = SettingsManager.getDoubleSpaceToPeriod(this)
+            if (doubleSpaceToPeriodEnabled) {
+                val currentTime = System.currentTimeMillis()
+                // Verifica se è un doppio tap spazio (spazio premuto entro DOUBLE_TAP_THRESHOLD dall'ultimo spazio)
+                val isDoubleTap = lastSpacePressTime > 0 && 
+                                 (currentTime - lastSpacePressTime) < DOUBLE_TAP_THRESHOLD
+                
+                if (isDoubleTap) {
+                    // Quando viene premuto spazio la seconda volta, in onKeyDown lo spazio NON è ancora stato inserito
+                    // Quindi verifichiamo se c'è già uno spazio prima del cursore (dal primo tap)
+                    val textBeforeCursor = inputConnection.getTextBeforeCursor(100, 0)
+                    if (textBeforeCursor != null && textBeforeCursor.endsWith(" ")) {
+                        // ECcezione: se ci sono già spazi multipli consecutivi (ultimo carattere è spazio),
+                        // non attivare la sostituzione. Verifica se c'è un altro spazio prima.
+                        if (textBeforeCursor.length >= 2 && textBeforeCursor[textBeforeCursor.length - 2] == ' ') {
+                            // Già ci sono spazi multipli, non attivare la sostituzione
+                            Log.d(TAG, "Doppio tap spazio ignorato: già presenti spazi multipli")
+                            // Non resettiamo lastSpacePressTime qui, così il prossimo spazio sarà ancora un doppio tap
+                        } else {
+                            // Trova l'ultimo carattere non-spazio prima dello spazio
+                            var lastCharIndex = textBeforeCursor.length - 2 // Indice dell'ultimo carattere prima dello spazio
+                            while (lastCharIndex >= 0 && textBeforeCursor[lastCharIndex].isWhitespace()) {
+                                lastCharIndex--
+                            }
+                            
+                            // Verifica se l'ultimo carattere non-spazio è alfabetico
+                            if (lastCharIndex >= 0) {
+                                val lastChar = textBeforeCursor[lastCharIndex]
+                                if (lastChar.isLetter()) {
+                                    // L'ultimo carattere è una lettera, procediamo con la sostituzione
+                                    // C'è uno spazio dal primo tap, cancellalo e inserisci ". "
+                                    inputConnection.deleteSurroundingText(1, 0)
+                                    inputConnection.commitText(". ", 1)
+                                    
+                                    // Attiva shiftOneShot per capitalizzare la prossima lettera
+                                    shiftOneShot = true
+                                    updateStatusBarText()
+                                    
+                                    Log.d(TAG, "Doppio tap spazio: inserito '. ' e attivato shiftOneShot (ultimo carattere: '$lastChar')")
+                                    
+                                    // Reset per evitare triple tap
+                                    lastSpacePressTime = 0
+                                    return true // Consumiamo l'evento per impedire l'inserimento dello spazio
+                                } else {
+                                    // L'ultimo carattere non è alfabetico (punteggiatura, numero, ecc.)
+                                    // Non attivare la sostituzione, lascia che lo spazio venga inserito normalmente
+                                    Log.d(TAG, "Doppio tap spazio ignorato: ultimo carattere non alfabetico ('$lastChar')")
+                                    // Non resettiamo lastSpacePressTime qui, così il prossimo spazio sarà ancora un doppio tap
+                                }
+                            } else {
+                                // Nessun carattere trovato prima dello spazio (campo vuoto)
+                                // Inserisci comunque ". "
+                                inputConnection.deleteSurroundingText(1, 0)
+                                inputConnection.commitText(". ", 1)
+                                
+                                // Attiva shiftOneShot per capitalizzare la prossima lettera
+                                shiftOneShot = true
+                                updateStatusBarText()
+                                
+                                Log.d(TAG, "Doppio tap spazio: inserito '. ' e attivato shiftOneShot (campo vuoto)")
+                                
+                                // Reset per evitare triple tap
+                                lastSpacePressTime = 0
+                                return true // Consumiamo l'evento per impedire l'inserimento dello spazio
+                            }
+                        }
+                    } else {
+                        // Nessuno spazio trovato prima del cursore (caso limite)
+                        // Non dovrebbe succedere in un doppio tap normale, ma gestiamolo comunque
+                        // Non inseriamo nulla, lascia che lo spazio venga inserito normalmente
+                        Log.d(TAG, "Doppio tap spazio: nessuno spazio trovato prima del cursore")
+                    }
+                }
+                
+                // Aggiorna il timestamp dell'ultimo spazio premuto
+                lastSpacePressTime = currentTime
+            } else {
+                // Se l'impostazione è disabilitata, resetta il timestamp
+                lastSpacePressTime = 0
+            }
+        } else {
+            // Se non è spazio, resetta il timestamp dopo un certo tempo
+            // (per evitare che il doppio tap venga rilevato con ritardo)
+            if (lastSpacePressTime > 0) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastSpacePressTime >= DOUBLE_TAP_THRESHOLD) {
+                    lastSpacePressTime = 0
+                }
+            }
+        }
+        
         // GESTISCI AUTO-CORREZIONE PER SPAZIO E PUNTEGGIATURA
         if (isAutoCorrectEnabled) {
             // Controlla se è spazio o punteggiatura
-            val isSpace = keyCode == KeyEvent.KEYCODE_SPACE
             val isPunctuation = event?.unicodeChar != null && 
                                event.unicodeChar != 0 && 
                                event.unicodeChar.toChar() in ".,;:!?()[]{}\"'"

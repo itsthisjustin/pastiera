@@ -17,6 +17,10 @@
     <string name="auto_capitalize_title">Auto-Maiuscola Prima Lettera</string>
     <string name="auto_capitalize_description">Mette automaticamente in maiuscolo la prima lettera quando si inizia a scrivere in un campo di testo vuoto.</string>
     
+    <!-- Double Space to Period Section -->
+    <string name="double_space_to_period_title">Doppio Spazio per Punto</string>
+    <string name="double_space_to_period_description">Doppio tap su spazio per inserire un punto seguito da spazio e capitalizzare la lettera successiva.</string>
+    
     <!-- Info Section -->
     <string name="info_title">Informazioni</string>
     <string name="info_description">Le impostazioni vengono salvate automaticamente e applicate immediatamente all\'input method.</string>

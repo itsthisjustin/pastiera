@@ -52,6 +52,11 @@ fun SettingsScreen(
         mutableStateOf(SettingsManager.getAutoCapitalizeFirstLetter(context))
     }
     
+    // Carica il valore salvato del doppio tap spazio
+    var doubleSpaceToPeriod by remember {
+        mutableStateOf(SettingsManager.getDoubleSpaceToPeriod(context))
+    }
+    
     // Carica il valore salvato dell'auto-correzione
     var autoCorrectEnabled by remember {
         mutableStateOf(SettingsManager.getAutoCorrectEnabled(context))
@@ -237,6 +242,46 @@ fun SettingsScreen(
                         onCheckedChange = { enabled ->
                             autoCapitalizeFirstLetter = enabled
                             SettingsManager.setAutoCapitalizeFirstLetter(context, enabled)
+                        }
+                    )
+                }
+            }
+            
+            HorizontalDivider()
+            
+            // Double Space to Period
+            Surface(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.TextFields,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.double_space_to_period_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = stringResource(R.string.double_space_to_period_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = doubleSpaceToPeriod,
+                        onCheckedChange = { enabled ->
+                            doubleSpaceToPeriod = enabled
+                            SettingsManager.setDoubleSpaceToPeriod(context, enabled)
                         }
                     )
                 }

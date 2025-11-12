@@ -17,6 +17,10 @@
     <string name="auto_capitalize_title">Auto-Capitalize First Letter</string>
     <string name="auto_capitalize_description">Automatically capitalizes the first letter when starting to type in an empty text field.</string>
     
+    <!-- Double Space to Period Section -->
+    <string name="double_space_to_period_title">Double Space to Period</string>
+    <string name="double_space_to_period_description">Double tap space to insert a period followed by a space and capitalize the next letter.</string>
+    
     <!-- Info Section -->
     <string name="info_title">Information</string>
     <string name="info_description">Settings are automatically saved and immediately applied to the input method.</string>

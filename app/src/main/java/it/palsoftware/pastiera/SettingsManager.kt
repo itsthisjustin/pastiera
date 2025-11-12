@@ -17,6 +17,7 @@ object SettingsManager {
     // Chiavi delle impostazioni
     private const val KEY_LONG_PRESS_THRESHOLD = "long_press_threshold"
     private const val KEY_AUTO_CAPITALIZE_FIRST_LETTER = "auto_capitalize_first_letter"
+    private const val KEY_DOUBLE_SPACE_TO_PERIOD = "double_space_to_period"
     private const val KEY_SYM_MAPPINGS_CUSTOM = "sym_mappings_custom"
     private const val KEY_AUTO_CORRECT_ENABLED = "auto_correct_enabled"
     private const val KEY_AUTO_CORRECT_ENABLED_LANGUAGES = "auto_correct_enabled_languages"
@@ -26,6 +27,7 @@ object SettingsManager {
     private const val MIN_LONG_PRESS_THRESHOLD = 50L
     private const val MAX_LONG_PRESS_THRESHOLD = 1000L
     private const val DEFAULT_AUTO_CAPITALIZE_FIRST_LETTER = false
+    private const val DEFAULT_DOUBLE_SPACE_TO_PERIOD = false
     private const val DEFAULT_AUTO_CORRECT_ENABLED = true
     
     /**
@@ -81,6 +83,22 @@ object SettingsManager {
     fun setAutoCapitalizeFirstLetter(context: Context, enabled: Boolean) {
         getPreferences(context).edit()
             .putBoolean(KEY_AUTO_CAPITALIZE_FIRST_LETTER, enabled)
+            .apply()
+    }
+    
+    /**
+     * Ottiene lo stato del doppio tap spazio per inserire punto e spazio.
+     */
+    fun getDoubleSpaceToPeriod(context: Context): Boolean {
+        return getPreferences(context).getBoolean(KEY_DOUBLE_SPACE_TO_PERIOD, DEFAULT_DOUBLE_SPACE_TO_PERIOD)
+    }
+    
+    /**
+     * Imposta lo stato del doppio tap spazio per inserire punto e spazio.
+     */
+    fun setDoubleSpaceToPeriod(context: Context, enabled: Boolean) {
+        getPreferences(context).edit()
+            .putBoolean(KEY_DOUBLE_SPACE_TO_PERIOD, enabled)
             .apply()
     }
     
