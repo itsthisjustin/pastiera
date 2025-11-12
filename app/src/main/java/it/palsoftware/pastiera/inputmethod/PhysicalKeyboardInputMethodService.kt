@@ -10,6 +10,8 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import it.palsoftware.pastiera.inputmethod.KeyboardEventTracker
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Servizio di immissione specializzato per tastiere fisiche.
@@ -23,6 +25,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
 
     // SharedPreferences per le impostazioni
     private lateinit var prefs: SharedPreferences
+    private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     private lateinit var altSymManager: AltSymManager
     private lateinit var statusBarController: StatusBarController
@@ -87,6 +90,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         super.onCreate()
         Log.d(TAG, "onCreate() chiamato")
         prefs = getSharedPreferences("pastiera_prefs", Context.MODE_PRIVATE)
+        
+        // Crea il canale di notifica per Android 8.0+
+        NotificationHelper.createNotificationChannel(this)
+        
         statusBarController = StatusBarController(this)
         // Registra listener per la selezione delle variazioni
         statusBarController.onVariationSelectedListener = object : VariationButtonHandler.OnVariationSelectedListener {
@@ -96,7 +103,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                 updateStatusBarText()
             }
         }
-        altSymManager = AltSymManager(assets, prefs)
+        altSymManager = AltSymManager(assets, prefs, this)
+        altSymManager.reloadSymMappings() // Carica mappature personalizzate se presenti
         // Registra callback per notificare quando viene inserito un carattere Alt dopo long press
         // Le variazioni vengono aggiornate automaticamente da updateStatusBarText()
         altSymManager.onAltCharInserted = { char ->
@@ -104,7 +112,31 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         }
         ctrlKeyMap.putAll(KeyMappingLoader.loadCtrlKeyMappings(assets))
         variationsMap.putAll(KeyMappingLoader.loadVariations(assets))
+        
+        // Registra listener per cambiamenti alle SharedPreferences
+        prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
+            if (key == "sym_mappings_custom") {
+                Log.d(TAG, "Mappature SYM modificate, ricarico...")
+                // Ricarica le mappature SYM
+                altSymManager.reloadSymMappings()
+                // Aggiorna la status bar per riflettere le nuove mappature
+                Handler(Looper.getMainLooper()).post {
+                    updateStatusBarText()
+                }
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        
         Log.d(TAG, "onCreate() completato")
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Rimuovi il listener quando il servizio viene distrutto
+        prefsListener?.let {
+            prefs.unregisterOnSharedPreferenceChangeListener(it)
+        }
+        Log.d(TAG, "onDestroy() chiamato")
     }
 
     override fun onCreateInputView(): View? {
@@ -346,9 +378,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         )
         // Passa anche la mappa emoji quando SYM è attivo
         val emojiMapText = if (symKeyActive) altSymManager.buildEmojiMapText() else ""
+        // Passa le mappature SYM per la griglia emoji
+        val symMappings = if (symKeyActive) altSymManager.getSymMappings() else null
         // Passa l'inputConnection per rendere i pulsanti clickabili
         val inputConnection = currentInputConnection
-        statusBarController.update(snapshot, emojiMapText, inputConnection)
+        statusBarController.update(snapshot, emojiMapText, inputConnection, symMappings)
     }
     
     /**
@@ -478,6 +512,28 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                         ctrlLatchFromNavMode = false
                         ctrlLatchActive = false
                         Log.d(TAG, "onStartInputView() - disattivato nav mode perché entrato in campo di testo realmente editabile")
+                        // Cancella la notifica quando il nav mode viene disattivato
+                        NotificationHelper.cancelNavModeNotification(this)
+                    }
+                }
+                
+                // Gestisci auto-capitalize: attiva shiftOneShot se il campo è vuoto
+                val autoCapitalizeEnabled = SettingsManager.getAutoCapitalizeFirstLetter(this)
+                if (autoCapitalizeEnabled) {
+                    val inputConnection = currentInputConnection
+                    if (inputConnection != null) {
+                        // Controlla se il campo è vuoto
+                        val textBeforeCursor = inputConnection.getTextBeforeCursor(1000, 0)
+                        val textAfterCursor = inputConnection.getTextAfterCursor(1000, 0)
+                        val isFieldEmpty = (textBeforeCursor == null || textBeforeCursor.trim().isEmpty()) &&
+                                          (textAfterCursor == null || textAfterCursor.trim().isEmpty())
+                        
+                        if (isFieldEmpty) {
+                            // Attiva shiftOneShot per la prima lettera
+                            shiftOneShot = true
+                            Log.d(TAG, "Auto-capitalize: campo vuoto rilevato, shiftOneShot attivato")
+                            updateStatusBarText() // Aggiorna per mostrare "shift"
+                        }
                     }
                 }
             } else {
@@ -562,6 +618,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             ctrlLatchActive = false
             ctrlLatchFromNavMode = false
             Log.d(TAG, "Nav mode disattivato da Back")
+            // Cancella la notifica quando il nav mode viene disattivato
+            NotificationHelper.cancelNavModeNotification(this)
             updateStatusBarText()
             requestHideSelf(0) // Nascondi la tastiera quando si esce dal nav mode
             // Non consumiamo l'evento Back, lasciamo che Android lo gestisca
@@ -589,9 +647,13 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                     if (it) {
                         ctrlLatchFromNavMode = true
                         Log.d(TAG, "Nav mode: Ctrl latch attivato, ctrlLatchFromNavMode = true (impostato PRIMA di ensureInputViewCreated)")
+                        // Mostra la notifica quando il nav mode viene attivato
+                        NotificationHelper.showNavModeActivatedNotification(this)
                     } else {
                         ctrlLatchFromNavMode = false
                         Log.d(TAG, "Nav mode: Ctrl latch disattivato, ctrlLatchFromNavMode = false")
+                        // Cancella la notifica quando il nav mode viene disattivato
+                        NotificationHelper.cancelNavModeNotification(this)
                     }
                 }
                 result.ctrlPhysicallyPressed?.let { ctrlPhysicallyPressed = it }
@@ -697,6 +759,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                         ctrlLatchActive = false
                         ctrlLatchFromNavMode = false
                         Log.d(TAG, "Ctrl latch disattivato dal nav mode (premuto Ctrl)")
+                        // Cancella la notifica quando il nav mode viene disattivato
+                        NotificationHelper.cancelNavModeNotification(this)
                         updateStatusBarText()
                         requestHideSelf(0) // Nascondi la tastiera quando si esce dal nav mode
                     } else if (!ctrlLatchFromNavMode) {
@@ -924,18 +988,45 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                 }
             } else {
                 // Ctrl è premuto ma il tasto non ha una mappatura valida
-                // Gestione speciale per Backspace: cancella l'ultima parola
+                // Gestione speciale per Backspace: cancella l'ultima parola o il testo selezionato
                 if (keyCode == KeyEvent.KEYCODE_DEL) {
-                    // Ctrl+Backspace cancella l'ultima parola
-                    KeyboardEventTracker.notifyKeyEvent(
-                        keyCode,
-                        event,
-                        "KEY_DOWN",
-                        outputKeyCode = null,
-                        outputKeyCodeName = "delete_last_word"
+                    // Verifica se c'è del testo selezionato
+                    val extractedText = inputConnection.getExtractedText(
+                        android.view.inputmethod.ExtractedTextRequest().apply {
+                            flags = android.view.inputmethod.ExtractedText.FLAG_SELECTING
+                        },
+                        0
                     )
-                    TextSelectionHelper.deleteLastWord(inputConnection)
-                    return true
+                    
+                    val hasSelection = extractedText?.let {
+                        it.selectionStart >= 0 && it.selectionEnd >= 0 && it.selectionStart != it.selectionEnd
+                    } ?: false
+                    
+                    if (hasSelection) {
+                        // Se c'è testo selezionato, cancellalo
+                        KeyboardEventTracker.notifyKeyEvent(
+                            keyCode,
+                            event,
+                            "KEY_DOWN",
+                            outputKeyCode = null,
+                            outputKeyCodeName = "delete_selection"
+                        )
+                        // Cancella il testo selezionato usando commitText con stringa vuota
+                        inputConnection.commitText("", 0)
+                        Log.d(TAG, "Ctrl+Backspace: cancellato testo selezionato")
+                        return true
+                    } else {
+                        // Ctrl+Backspace cancella l'ultima parola
+                        KeyboardEventTracker.notifyKeyEvent(
+                            keyCode,
+                            event,
+                            "KEY_DOWN",
+                            outputKeyCode = null,
+                            outputKeyCodeName = "delete_last_word"
+                        )
+                        TextSelectionHelper.deleteLastWord(inputConnection)
+                        return true
+                    }
                 }
                 // Eccezione per Enter: continua a funzionare normalmente
                 if (keyCode == KeyEvent.KEYCODE_ENTER) {
@@ -997,30 +1088,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             }
         }
         
-        // Gestisci auto-maiuscola per la prima lettera (dopo Shift one-shot, prima delle mappature Alt)
-        if (event != null && event.unicodeChar != 0 && !event.isShiftPressed && !capsLockEnabled) {
-            val char = event.unicodeChar.toChar().toString()
-            if (char.isNotEmpty() && char[0].isLetter() && char[0].isLowerCase()) {
-                // Controlla se l'auto-maiuscola è abilitata
-                val autoCapitalizeEnabled = SettingsManager.getAutoCapitalizeFirstLetter(this)
-                if (autoCapitalizeEnabled) {
-                    // Controlla se il testo prima del cursore è vuoto o contiene solo spazi
-                    val textBeforeCursor = inputConnection.getTextBeforeCursor(1000, 0)
-                    if (textBeforeCursor != null) {
-                        val trimmedText = textBeforeCursor.trim()
-                        // Se il testo prima del cursore è vuoto o contiene solo spazi, è la prima lettera
-                        if (trimmedText.isEmpty()) {
-                            Log.d(TAG, "Auto-maiuscola: prima lettera rilevata, carattere: $char")
-                            val capitalizedChar = char.uppercase()
-                            inputConnection.commitText(capitalizedChar, 1)
-                            // Aggiorna le variazioni dopo l'inserimento
-                            updateStatusBarText()
-                            return true
-                        }
-                    }
-                }
-            }
-        }
+        // Auto-capitalize è ora gestito attivando shiftOneShot in onStartInputView
+        // Non serve più modificare direttamente il carattere qui
         
         // Controlla se questo tasto ha una mappatura Alt
         if (altSymManager.hasAltMapping(keyCode)) {

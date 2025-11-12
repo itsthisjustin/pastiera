@@ -1,5 +1,6 @@
 package it.palsoftware.pastiera.inputmethod
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.AssetManager
 import android.os.Handler
@@ -13,8 +14,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Gestisce le mappature Alt/SYM, il long press e l'inserimento dei caratteri speciali.
  */
 class AltSymManager(
-    assets: AssetManager,
-    private val prefs: SharedPreferences
+    private val assets: AssetManager,
+    private val prefs: SharedPreferences,
+    private val context: Context? = null
 ) {
     // Callback chiamato quando viene inserito un carattere Alt dopo long press
     var onAltCharInserted: ((Char) -> Unit)? = null
@@ -48,6 +50,25 @@ class AltSymManager(
     fun getAltMappings(): Map<Int, String> = altKeyMap
 
     fun getSymMappings(): Map<Int, String> = symKeyMap
+    
+    /**
+     * Ricarica le mappature SYM, controllando prima le personalizzazioni.
+     */
+    fun reloadSymMappings() {
+        if (context != null) {
+            val customMappings = it.palsoftware.pastiera.SettingsManager.getSymMappings(context)
+            if (customMappings.isNotEmpty()) {
+                symKeyMap.clear()
+                symKeyMap.putAll(customMappings)
+                Log.d(TAG, "Caricate mappature SYM personalizzate: ${customMappings.size} mappature")
+            } else {
+                // Usa quelle di default dal JSON
+                symKeyMap.clear()
+                symKeyMap.putAll(KeyMappingLoader.loadSymKeyMappings(assets))
+                Log.d(TAG, "Caricate mappature SYM di default")
+            }
+        }
+    }
 
     fun hasAltMapping(keyCode: Int): Boolean = altKeyMap.containsKey(keyCode)
 

@@ -3,13 +3,19 @@ package it.palsoftware.pastiera
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,12 +24,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import it.palsoftware.pastiera.R
 import it.palsoftware.pastiera.inputmethod.KeyboardEventTracker
+import it.palsoftware.pastiera.inputmethod.NotificationHelper
 import it.palsoftware.pastiera.ui.theme.PastieraTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Settings
 
 class MainActivity : ComponentActivity() {
@@ -153,6 +163,27 @@ fun KeyboardSetupScreen(
     
     // Stato per la navigazione alle impostazioni
     var showSettings by remember { mutableStateOf(false) }
+    var showSymCustomization by remember { mutableStateOf(false) }
+    
+    // Richiesta permesso per le notifiche (Android 13+)
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            android.util.Log.d("MainActivity", "Permesso per le notifiche concesso")
+        } else {
+            android.util.Log.w("MainActivity", "Permesso per le notifiche negato")
+        }
+    }
+    
+    // Richiedi il permesso per le notifiche quando il composable viene creato (solo su Android 13+)
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (!NotificationHelper.hasNotificationPermission(context)) {
+                requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
     
     // Collega lo stato al tracker globale
     LaunchedEffect(Unit) {
@@ -166,157 +197,176 @@ fun KeyboardSetupScreen(
         }
     }
     
-    // Navigazione condizionale
-    if (showSettings) {
-        SettingsScreen(
-            modifier = modifier,
-            onBack = { showSettings = false }
-        )
-        return
-    }
-    
-    Column(
-        modifier = modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header con pulsante impostazioni
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Pastiera Keyboard",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Tastiera fisica con supporto long press",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+    // Navigazione condizionale con animazioni
+    AnimatedContent(
+        targetState = when {
+            showSymCustomization -> "sym"
+            showSettings -> "settings"
+            else -> "main"
+        },
+        transitionSpec = {
+            when {
+                targetState == "sym" && initialState == "settings" -> {
+                    // Slide da destra quando vai a SYM
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) togetherWith slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(300)
+                    )
+                }
+                targetState == "settings" && initialState == "main" -> {
+                    // Slide da destra quando vai a Settings
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) togetherWith fadeOut(animationSpec = tween(200))
+                }
+                targetState == "main" && initialState == "settings" -> {
+                    // Slide da sinistra quando torni indietro
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(300)
+                    ) togetherWith slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(300)
+                    )
+                }
+                targetState == "settings" && initialState == "sym" -> {
+                    // Slide da sinistra quando torni da SYM
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(300)
+                    ) togetherWith slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(300)
+                    )
+                }
+                else -> {
+                    fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
+                }
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+        label = "screen_transition"
+    ) { target ->
+        when (target) {
+            "sym" -> {
+                SymCustomizationScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    onBack = { showSymCustomization = false }
                 )
             }
-            IconButton(onClick = { showSettings = true }) {
+            "settings" -> {
+                SettingsScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    onBack = { showSettings = false },
+                    onSymCustomizationClick = { showSymCustomization = true }
+                )
+            }
+            else -> {
+                // Main screen
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+        // Header moderno
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            tonalElevation = 1.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.keyboard_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                IconButton(onClick = { showSettings = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = stringResource(R.string.settings_content_description)
+                    )
+                }
+            }
+        }
+        
+        // Pulsante per aprire impostazioni tastiera
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+                    context.startActivity(intent)
+                }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.open_keyboard_settings),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
                 Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "Impostazioni"
+                    imageVector = Icons.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
         
-        Divider()
+        HorizontalDivider()
         
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Installazione",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "1. Clicca il pulsante qui sotto per aprire le impostazioni",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "2. Attiva 'Tastiera Fisica Pastiera'",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "3. Torna qui e testa la tastiera",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-        
-        Button(
-            onClick = {
-                val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                context.startActivity(intent)
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Apri Impostazioni Tastiera")
-        }
-        
-        Divider()
-        
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Test Tastiera",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Collega una tastiera fisica e testa qui sotto:",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "• Pressione normale: inserisce il carattere",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "• Long press (500ms): inserisce il carattere Alt",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-        
+        // Campo di test
         OutlinedTextField(
             value = testText,
             onValueChange = { testText = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Campo di test") },
-            placeholder = { Text("Digita qui con la tastiera fisica...") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            placeholder = { Text(stringResource(R.string.test_field_placeholder)) },
             minLines = 5,
             maxLines = 10
         )
         
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Ultimo evento tastiera (solo se presente)
+        val event = lastKeyEvent
+        if (event != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
             ) {
-                Text(
-                    text = "Ultimo Evento Tastiera",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                val event = lastKeyEvent
-                if (event != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = "KeyCode: ${event.keyCode} (${event.keyCodeName})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace
+                        text = stringResource(R.string.last_keyboard_event_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Azione: ${event.action}",
+                        text = "${event.keyCodeName}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace
                     )
@@ -333,101 +383,56 @@ fun KeyboardSetupScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (event.isAltPressed) {
-                            Text(
-                                text = "ALT",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        if (event.isShiftPressed) {
-                            Text(
-                                text = "SHIFT",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        if (event.isCtrlPressed) {
-                            Text(
-                                text = "CTRL",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
+                    if (event.isShiftPressed || event.isCtrlPressed || event.isAltPressed) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (event.isShiftPressed) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = "SHIFT",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            if (event.isCtrlPressed) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = "CTRL",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            if (event.isAltPressed) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = "ALT",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
-                } else {
-                    Text(
-                        text = "Nessun evento ancora",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
-        
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Mappature Long Press",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Q→0, W→1, E→2, R→3, T→(, Y→), U→-, I→_, O→', P→:",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "A→@, S→4, D→5, F→6, G→*, H→#, J→+, K→\", L→'",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "Z→!, X→7, C→8, V→9, B→., N→', M→?",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                }
             }
-        }
-        
-        Button(
-            onClick = { showSettings = true },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Settings,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Impostazioni")
-        }
-        
-        Button(
-            onClick = {
-                val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.showInputMethodPicker()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary
-            )
-        ) {
-            Text("Cambia Metodo di Immissione")
         }
     }
 }

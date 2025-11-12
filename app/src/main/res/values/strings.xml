@@ -1,4 +1,65 @@
 <resources>
     <string name="app_name">Pastiera</string>
-    <string name="input_method_name">Tastiera Fisica Pastiera</string>
+    <string name="input_method_name">Pastiera Physical Keyboard</string>
+    
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="back">Back</string>
+    <string name="settings_back_content_description">Back</string>
+    
+    <!-- Long Press Section -->
+    <string name="long_press_title">Long Press</string>
+    <string name="long_press_duration">Long Press Duration: %1$dms</string>
+    <string name="long_press_description">Wait time before a long press is recognized. A lower value makes long press more responsive, while a higher value requires a longer press.</string>
+    <string name="setting_applied_immediately">Setting applied immediately</string>
+    
+    <!-- Auto Capitalize Section -->
+    <string name="auto_capitalize_title">Auto-Capitalize First Letter</string>
+    <string name="auto_capitalize_description">Automatically capitalizes the first letter when starting to type in an empty text field.</string>
+    
+    <!-- Info Section -->
+    <string name="info_title">Information</string>
+    <string name="info_description">Settings are automatically saved and immediately applied to the input method.</string>
+    
+    <!-- Main Activity -->
+    <string name="keyboard_title">Pastiera Keyboard</string>
+    <string name="keyboard_subtitle">Physical keyboard with long press support</string>
+    <string name="settings_content_description">Settings</string>
+    
+    <!-- Installation Section -->
+    <string name="installation_title">Installation</string>
+    <string name="installation_step1">1. Click the button below to open settings</string>
+    <string name="installation_step2">2. Enable \'Pastiera Physical Keyboard\'</string>
+    <string name="installation_step3">3. Come back here and test the keyboard</string>
+    <string name="open_keyboard_settings">Open Keyboard Settings</string>
+    
+    <!-- Test Section -->
+    <string name="test_keyboard_title">Keyboard Test</string>
+    <string name="test_keyboard_description">Connect a physical keyboard and test below:</string>
+    <string name="test_keyboard_normal">• Normal press: inserts the character</string>
+    <string name="test_keyboard_long_press">• Long press (500ms): inserts the Alt character</string>
+    <string name="test_field_label">Test field</string>
+    <string name="test_field_placeholder">Type here with the physical keyboard…</string>
+    
+    <!-- Last Event Section -->
+    <string name="last_keyboard_event_title">Last Keyboard Event</string>
+    <string name="no_event_yet">No event yet</string>
+    
+    <!-- Long Press Mappings Section -->
+    <string name="long_press_mappings_title">Long Press Mappings</string>
+    <string name="long_press_mappings_line1">Q→0, W→1, E→2, R→3, T→(, Y→), U→-, I→_, O→\', P→:</string>
+    <string name="long_press_mappings_line2">A→@, S→4, D→5, F→6, G→*, H→#, J→+, K→\", L→\'</string>
+    <string name="long_press_mappings_line3">Z→!, X→7, C→8, V→9, B→., N→\', M→?</string>
+    
+    <!-- Buttons -->
+    <string name="settings_button">Settings</string>
+    <string name="change_keyboard_button">Change Keyboard</string>
+    
+    <!-- SYM Customization -->
+    <string name="sym_customization_title">Customize SYM Keyboard</string>
+    <string name="sym_customization_button">Customize SYM Keyboard</string>
+    <string name="sym_customization_description">Personalize emoji mappings for the SYM keyboard. Tap on any key to change its emoji.</string>
+    <string name="reset_to_default">Reset to Default</string>
+    <string name="select_emoji">Select Emoji</string>
+    <string name="close">Close</string>
 </resources>
