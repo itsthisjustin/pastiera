@@ -1,5 +1,6 @@
 package it.palsoftware.pastiera.core.suggestions
 
+import android.util.Log
 import android.view.KeyEvent
 import android.view.inputmethod.InputConnection
 import java.util.Locale
@@ -9,6 +10,10 @@ class AutoReplaceController(
     private val suggestionEngine: SuggestionEngine,
     private val settingsProvider: () -> SuggestionSettings
 ) {
+
+    companion object {
+        private const val TAG = "AutoReplaceController"
+    }
 
     data class ReplaceResult(val replaced: Boolean, val committed: Boolean)
 
@@ -27,20 +32,29 @@ class AutoReplaceController(
         }
 
         val settings = settingsProvider()
+        Log.d(TAG, "handleBoundary: autoReplaceOnSpaceEnter=${settings.autoReplaceOnSpaceEnter} maxDist=${settings.maxAutoReplaceDistance}")
+
         if (!settings.autoReplaceOnSpaceEnter || inputConnection == null) {
+            Log.d(TAG, "handleBoundary: skipping - autoReplace=${settings.autoReplaceOnSpaceEnter} ic=${inputConnection != null}")
             tracker.onBoundaryReached(boundaryChar, inputConnection)
             return ReplaceResult(false, unicodeChar != 0)
         }
 
         val word = tracker.currentWord
+        Log.d(TAG, "handleBoundary: word='$word' dictReady=${repository.isReady}")
+
         if (word.isBlank()) {
             tracker.onBoundaryReached(boundaryChar, inputConnection)
             return ReplaceResult(false, unicodeChar != 0)
         }
 
-        val suggestions = suggestionEngine.suggest(word, limit = 1, includeAccentMatching = settings.accentMatching)
+        val suggestions = suggestionEngine.suggest(word, limit = 3, includeAccentMatching = settings.accentMatching)
         val top = suggestions.firstOrNull()
-        val shouldReplace = top != null && !repository.isKnownWord(word) && top.distance <= settings.maxAutoReplaceDistance
+        val isKnown = repository.isKnownWord(word)
+        Log.d(TAG, "handleBoundary: suggestions=${suggestions.size} top=${top?.candidate}:${top?.distance} isKnown=$isKnown")
+
+        val shouldReplace = top != null && !isKnown && top.distance <= settings.maxAutoReplaceDistance
+        Log.d(TAG, "handleBoundary: shouldReplace=$shouldReplace (top!=null:${top!=null}, !isKnown:${!isKnown}, dist<=${settings.maxAutoReplaceDistance}:${top?.distance?.let { it <= settings.maxAutoReplaceDistance }})")
 
         if (shouldReplace && top != null) {
             val replacement = applyCasing(top.candidate, word)

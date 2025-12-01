@@ -45,7 +45,7 @@ fun AutoCorrectionCategoryScreen(
     var experimentalSuggestionsEnabled by remember {
         mutableStateOf(SettingsManager.isExperimentalSuggestionsEnabled(context))
     }
-    var showExperimentalToggle by remember { mutableStateOf(false) }
+    var showExperimentalToggle by remember { mutableStateOf(true) }
     var experimentalTapCount by remember { mutableStateOf(0) }
     var suggestionsEnabled by remember {
         mutableStateOf(SettingsManager.getSuggestionsEnabled(context))

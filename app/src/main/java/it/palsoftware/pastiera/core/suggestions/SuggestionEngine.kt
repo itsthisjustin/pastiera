@@ -22,8 +22,6 @@ class SuggestionEngine(
     private val accentCache: MutableMap<String, String> = mutableMapOf()
     private val tag = "SuggestionEngine"
     private val wordNormalizeCache: MutableMap<String, String> = mutableMapOf()
-    private var lastNormalized: String = ""
-    private var lastBucket: List<DictionaryEntry> = emptyList()
 
     fun suggest(
         currentWord: String,
@@ -36,61 +34,56 @@ class SuggestionEngine(
         // Require at least 2 characters to avoid heavy buckets on large dictionaries.
         if (normalizedWord.length < 2) return emptyList()
 
-        val prefixKey = normalizedWord.take(4)
+        // Generate prefix variants to catch transpositions (e.g., "teh" -> also check "the", "eth")
+        val prefixVariants = generatePrefixVariants(normalizedWord)
 
-        val candidates: List<DictionaryEntry> = when {
-            lastNormalized.isNotEmpty() &&
-                normalizedWord.startsWith(lastNormalized) &&
-                normalizedWord.length == lastNormalized.length + 1 -> {
-                // Extend typed prefix by 1: filter previous bucket.
-                lastBucket.filter { normalizeCached(it.word).startsWith(normalizedWord) }
-            }
-            lastNormalized.length > normalizedWord.length &&
-                lastNormalized.startsWith(normalizedWord) -> {
-                // Backspace/shorter prefix: reload bucket for new prefix.
-                repository.lookupByPrefix(normalizedWord)
-            }
-            else -> {
-                // Fresh lookup for the current prefix.
-                repository.lookupByPrefix(normalizedWord)
-            }
+        // Collect candidates from all prefix variants
+        val candidateSet = mutableSetOf<DictionaryEntry>()
+        for (prefix in prefixVariants) {
+            candidateSet.addAll(repository.lookupByPrefix(prefix))
         }
+        val candidates = candidateSet.toList()
 
         if (debugLogging) {
-            Log.d(tag, "suggest '$currentWord' normalized='$normalizedWord' candidates=${candidates.size}")
-        }
-
-        lastNormalized = normalizedWord
-        lastBucket = candidates
-
-        if (debugLogging) {
-            Log.d(tag, "suggest '$currentWord' normalized='$normalizedWord' candidates=${candidates.size}")
+            Log.d(tag, "suggest '$currentWord' normalized='$normalizedWord' prefixes=$prefixVariants candidates=${candidates.size}")
         }
 
         val scored = mutableListOf<SuggestionResult>()
         for (entry in candidates) {
             val normalizedCandidate = normalizeCached(entry.word)
-            val distance = if (normalizedCandidate.startsWith(normalizedWord)) {
-                0 // treat prefix match as perfect to surface completions early
-            } else {
-                boundedLevenshtein(normalizedWord, normalizedCandidate, 2)
-            }
+
+            // Calculate actual edit distance (don't treat prefix as 0 for autocorrection accuracy)
+            val distance = boundedLevenshtein(normalizedWord, normalizedCandidate, 2)
             if (distance < 0) continue
 
             val accentDistance = if (includeAccentMatching) {
                 val normalizedNoAccent = stripAccents(normalizedCandidate)
-                if (normalizedNoAccent.startsWith(normalizedWord)) {
-                    0
-                } else {
-                    boundedLevenshtein(normalizedWord, normalizedNoAccent, 2)
-                }
+                boundedLevenshtein(normalizedWord, normalizedNoAccent, 2)
             } else distance
 
-            val effectiveDistance = min(distance, accentDistance)
-            val distanceScore = 1.0 / (1 + effectiveDistance)
-            val frequencyScore = entry.frequency / 10_000.0
-            val sourceBoost = if (entry.source == SuggestionSource.USER) 2.0 else 1.0
-            val score = (distanceScore + frequencyScore) * sourceBoost
+            val effectiveDistance = if (accentDistance >= 0) min(distance, accentDistance) else distance
+
+            // Scoring: heavily weight frequency, penalize longer words
+            // Frequency is on scale of ~1-10,000,000, normalize to 0-1 range with log scale
+            val logFreq = kotlin.math.ln(entry.frequency.toDouble() + 1)
+            val maxLogFreq = kotlin.math.ln(10_000_000.0)
+            val normalizedFreq = logFreq / maxLogFreq  // 0 to 1
+
+            // Length penalty: prefer words closer to input length
+            val lengthDiff = kotlin.math.abs(normalizedCandidate.length - normalizedWord.length)
+            val lengthPenalty = 1.0 / (1 + lengthDiff * 0.5)
+
+            // Distance is most important, then frequency, then length
+            val distanceScore = 1.0 / (1 + effectiveDistance * 2)
+            val sourceBoost = if (entry.source == SuggestionSource.USER) 1.5 else 1.0
+
+            // Combined score: distance matters most, frequency breaks ties
+            val score = (distanceScore * 10 + normalizedFreq * 5 + lengthPenalty) * sourceBoost
+
+            if (debugLogging && effectiveDistance <= 1) {
+                Log.d(tag, "  candidate='${entry.word}' dist=$effectiveDistance freq=${entry.frequency} score=$score")
+            }
+
             scored.add(
                 SuggestionResult(
                     candidate = entry.word,
@@ -110,27 +103,74 @@ class SuggestionEngine(
             .take(limit)
     }
 
+    /**
+     * Generate prefix variants to catch common typos:
+     * - Transpositions: "teh" -> "the"
+     * - Deletions: "tesst" -> "test" (delete one char)
+     * - Substitutions: covered by Levenshtein after lookup
+     * Only generates variants for the first few characters to limit lookups.
+     */
+    private fun generatePrefixVariants(word: String): Set<String> {
+        val variants = mutableSetOf(word)
+
+        // Generate transpositions for first 3 character positions
+        val maxPos = minOf(word.length - 1, 3)
+        for (i in 0 until maxPos) {
+            val chars = word.toCharArray()
+            val temp = chars[i]
+            chars[i] = chars[i + 1]
+            chars[i + 1] = temp
+            variants.add(String(chars))
+        }
+
+        // Generate deletions for first 4 character positions
+        // "tesst" -> "esst", "tsst", "test", "tess"
+        val maxDelPos = minOf(word.length, 4)
+        for (i in 0 until maxDelPos) {
+            val deleted = word.removeRange(i, i + 1)
+            if (deleted.length >= 2) {
+                variants.add(deleted)
+            }
+        }
+
+        return variants
+    }
+
+    /**
+     * Damerau-Levenshtein distance with transposition support.
+     * Transposing adjacent characters counts as 1 edit (not 2).
+     * This handles common typos like "teh" -> "the" correctly.
+     */
     private fun boundedLevenshtein(a: String, b: String, maxDistance: Int): Int {
         if (kotlin.math.abs(a.length - b.length) > maxDistance) return -1
-        val dp = IntArray(b.length + 1) { it }
-        for (i in 1..a.length) {
-            var prev = dp[0]
-            dp[0] = i
-            var minRow = dp[0]
-            for (j in 1..b.length) {
-                val temp = dp[j]
+
+        val lenA = a.length
+        val lenB = b.length
+
+        // Use full matrix for Damerau-Levenshtein (needed for transposition check)
+        val dp = Array(lenA + 1) { IntArray(lenB + 1) }
+
+        for (i in 0..lenA) dp[i][0] = i
+        for (j in 0..lenB) dp[0][j] = j
+
+        for (i in 1..lenA) {
+            var minRow = dp[i][0]
+            for (j in 1..lenB) {
                 val cost = if (a[i - 1] == b[j - 1]) 0 else 1
-                dp[j] = minOf(
-                    dp[j] + 1,
-                    dp[j - 1] + 1,
-                    prev + cost
+                dp[i][j] = minOf(
+                    dp[i - 1][j] + 1,      // deletion
+                    dp[i][j - 1] + 1,      // insertion
+                    dp[i - 1][j - 1] + cost // substitution
                 )
-                prev = temp
-                minRow = min(minRow, dp[j])
+                // Transposition: swap adjacent characters
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                    dp[i][j] = minOf(dp[i][j], dp[i - 2][j - 2] + 1)
+                }
+                minRow = min(minRow, dp[i][j])
             }
             if (minRow > maxDistance) return -1
         }
-        return if (dp[b.length] <= maxDistance) dp[b.length] else -1
+        return if (dp[lenA][lenB] <= maxDistance) dp[lenA][lenB] else -1
     }
 
     private fun normalize(word: String): String {

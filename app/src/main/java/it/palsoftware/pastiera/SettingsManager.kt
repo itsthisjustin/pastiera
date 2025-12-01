@@ -64,15 +64,15 @@ object SettingsManager {
     private const val DEFAULT_AUTO_CORRECT_ENABLED = true
     private const val DEFAULT_SUGGESTIONS_ENABLED = true
     private const val DEFAULT_ACCENT_MATCHING_ENABLED = true
-    private const val DEFAULT_AUTO_REPLACE_ON_SPACE_ENTER = false
+    private const val DEFAULT_AUTO_REPLACE_ON_SPACE_ENTER = true
     private const val DEFAULT_AUTO_CAPITALIZE_AFTER_PERIOD = true
     private const val DEFAULT_LONG_PRESS_MODIFIER = "alt"
     private const val DEFAULT_KEYBOARD_LAYOUT = "qwerty"
     private const val DEFAULT_SYM_AUTO_CLOSE = true
     private val DEFAULT_SYM_PAGES_CONFIG = SymPagesConfig()
     private const val DEFAULT_STATIC_VARIATION_BAR_MODE = false
-    private const val DEFAULT_EXPERIMENTAL_SUGGESTIONS_ENABLED = false
-    private const val DEFAULT_SUGGESTION_DEBUG_LOGGING = false
+    private const val DEFAULT_EXPERIMENTAL_SUGGESTIONS_ENABLED = true
+    private const val DEFAULT_SUGGESTION_DEBUG_LOGGING = true
     private const val KEY_EXPERIMENTAL_SUGGESTIONS_ENABLED = "experimental_suggestions_enabled"
     private const val KEY_SUGGESTION_DEBUG_LOGGING = "suggestion_debug_logging"
     

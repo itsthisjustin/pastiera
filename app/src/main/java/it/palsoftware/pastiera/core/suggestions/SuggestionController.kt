@@ -24,19 +24,16 @@ class SuggestionController(
 
     private val appContext = context.applicationContext
     private val debugLogging: Boolean = debugLogging
-    private val userDictionaryStore = UserDictionaryStore()
-    private val dictionaryRepository = DictionaryRepository(appContext, assets, userDictionaryStore, debugLogging = debugLogging)
-    private val suggestionEngine = SuggestionEngine(dictionaryRepository, debugLogging = debugLogging)
+    private val symSpellEngine = SymSpellEngine(assets, debugLogging = debugLogging)
     private val tracker = CurrentWordTracker(
         onWordChanged = { word ->
             val settings = settingsProvider()
             if (settings.suggestionsEnabled) {
-                onSuggestionsUpdated(suggestionEngine.suggest(word, settings.maxSuggestions, settings.accentMatching))
+                onSuggestionsUpdated(symSpellEngine.suggest(word, settings.maxSuggestions))
             }
         },
         onWordReset = { onSuggestionsUpdated(emptyList()) }
     )
-    private val autoReplaceController = AutoReplaceController(dictionaryRepository, suggestionEngine, settingsProvider)
     private val latestSuggestions: AtomicReference<List<SuggestionResult>> = AtomicReference(emptyList())
     private val loadScope = CoroutineScope(Dispatchers.Default)
     private val cursorHandler = Handler(Looper.getMainLooper())
@@ -62,7 +59,7 @@ class SuggestionController(
     private fun updateSuggestions() {
         val settings = settingsProvider()
         if (settings.suggestionsEnabled) {
-            val next = suggestionEngine.suggest(tracker.currentWord, settings.maxSuggestions, settings.accentMatching)
+            val next = symSpellEngine.suggest(tracker.currentWord, settings.maxSuggestions)
             val summary = next.take(3).joinToString { "${it.candidate}:${it.distance}" }
             if (debugLogging) Log.d("PastieraIME", "suggestions (${next.size}): $summary")
             latestSuggestions.set(next)
@@ -72,25 +69,81 @@ class SuggestionController(
         }
     }
 
+    data class ReplaceResult(val replaced: Boolean, val committed: Boolean)
+
     fun onBoundaryKey(
         keyCode: Int,
         event: KeyEvent?,
         inputConnection: InputConnection?
-    ): AutoReplaceController.ReplaceResult {
+    ): ReplaceResult {
+        val unicodeChar = event?.unicodeChar ?: 0
+        val boundaryChar = when {
+            unicodeChar != 0 -> unicodeChar.toChar()
+            keyCode == KeyEvent.KEYCODE_SPACE -> ' '
+            keyCode == KeyEvent.KEYCODE_ENTER -> '\n'
+            else -> null
+        }
+
+        val settings = settingsProvider()
         if (debugLogging) {
-            Log.d(
-                "PastieraIME",
-                "SuggestionController.onBoundaryKey keyCode=$keyCode char=${event?.unicodeChar}"
-            )
+            Log.d("PastieraIME", "onBoundaryKey: autoReplace=${settings.autoReplaceOnSpaceEnter} word='${tracker.currentWord}'")
         }
+
+        if (!settings.autoReplaceOnSpaceEnter || inputConnection == null) {
+            tracker.onBoundaryReached(boundaryChar, inputConnection)
+            suggestionsListener?.invoke(emptyList())
+            return ReplaceResult(false, unicodeChar != 0)
+        }
+
         ensureDictionaryLoaded()
-        val result = autoReplaceController.handleBoundary(keyCode, event, tracker, inputConnection)
-        if (result.replaced) {
-            dictionaryRepository.refreshUserEntries()
-            NotificationHelper.triggerHapticFeedback(appContext)
+
+        val word = tracker.currentWord
+        if (word.isBlank()) {
+            tracker.onBoundaryReached(boundaryChar, inputConnection)
+            suggestionsListener?.invoke(emptyList())
+            return ReplaceResult(false, unicodeChar != 0)
         }
+
+        val suggestions = symSpellEngine.suggest(word, maxSuggestions = 1)
+        val top = suggestions.firstOrNull()
+        val isKnown = symSpellEngine.isKnownWord(word)
+
+        if (debugLogging) {
+            Log.d("PastieraIME", "onBoundaryKey: top=${top?.candidate}:${top?.distance} isKnown=$isKnown maxDist=${settings.maxAutoReplaceDistance}")
+        }
+
+        val shouldReplace = top != null && !isKnown && top.distance <= settings.maxAutoReplaceDistance
+
+        if (shouldReplace && top != null) {
+            val replacement = applyCasing(top.candidate, word)
+            if (debugLogging) {
+                Log.d("PastieraIME", "onBoundaryKey: replacing '$word' -> '$replacement'")
+            }
+            inputConnection.beginBatchEdit()
+            inputConnection.deleteSurroundingText(word.length, 0)
+            inputConnection.commitText(replacement, 1)
+            tracker.reset()
+            inputConnection.endBatchEdit()
+            if (boundaryChar != null) {
+                inputConnection.commitText(boundaryChar.toString(), 1)
+            }
+            NotificationHelper.triggerHapticFeedback(appContext)
+            suggestionsListener?.invoke(emptyList())
+            return ReplaceResult(true, true)
+        }
+
+        tracker.onBoundaryReached(boundaryChar, inputConnection)
         suggestionsListener?.invoke(emptyList())
-        return result
+        return ReplaceResult(false, unicodeChar != 0)
+    }
+
+    private fun applyCasing(candidate: String, original: String): String {
+        if (original.isEmpty()) return candidate
+        return when {
+            original.all { it.isUpperCase() } -> candidate.uppercase()
+            original.first().isUpperCase() -> candidate.replaceFirstChar { it.uppercaseChar() }
+            else -> candidate
+        }
     }
 
     fun onCursorMoved(inputConnection: InputConnection?) {
@@ -103,7 +156,7 @@ class SuggestionController(
             return
         }
         cursorRunnable = Runnable {
-            if (!dictionaryRepository.isReady) {
+            if (!symSpellEngine.isReady) {
                 tracker.reset()
                 suggestionsListener?.invoke(emptyList())
                 return@Runnable
@@ -131,24 +184,7 @@ class SuggestionController(
         tracker.onContextChanged()
     }
 
-    fun addUserWord(word: String) {
-        if (!isEnabled()) return
-        dictionaryRepository.addUserEntry(word)
-    }
-
-    fun removeUserWord(word: String) {
-        if (!isEnabled()) return
-        dictionaryRepository.removeUserEntry(word)
-    }
-
-    fun markUsed(word: String) {
-        if (!isEnabled()) return
-        dictionaryRepository.markUsed(word)
-    }
-
     fun currentSuggestions(): List<SuggestionResult> = latestSuggestions.get()
-
-    fun userDictionarySnapshot(): List<UserDictionaryStore.UserEntry> = userDictionaryStore.getSnapshot()
 
     private fun extractWordAtCursor(inputConnection: InputConnection?): String? {
         if (inputConnection == null) return null
@@ -172,11 +208,9 @@ class SuggestionController(
     }
 
     private fun ensureDictionaryLoaded() {
-        if (!dictionaryRepository.isReady) {
-            dictionaryRepository.ensureLoadScheduled {
-                loadScope.launch {
-                    dictionaryRepository.loadIfNeeded()
-                }
+        if (!symSpellEngine.isReady) {
+            loadScope.launch {
+                symSpellEngine.loadDictionary()
             }
         }
     }
