@@ -7,8 +7,6 @@ import android.util.Log
 import android.os.Looper
 import java.text.Normalizer
 import java.util.Locale
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.decodeFromString
 
 /**
  * Loads and indexes lightweight dictionaries from assets and merges them with the user dictionary.
@@ -61,9 +59,8 @@ class DictionaryRepository(
             if (debugLogging) {
                 Log.d(tag, "loadIfNeeded locale=$language dict=$dictFile main=${mainEntries.size} user=${userEntries.size}")
             }
-            
+
             // Always add user entries
-            val userEntries = userDictionaryStore.loadUserEntries(context)
             if (userEntries.isNotEmpty()) {
                 index(userEntries, keepExisting = true)
             }
@@ -145,31 +142,11 @@ class DictionaryRepository(
     /**
      * Attempts to load dictionary from serialized format (.dict file).
      * Returns true if successful, false otherwise (fallback to JSON).
+     * Note: Serialized dictionary support requires kotlinx.serialization dependency.
      */
     private fun loadSerializedFromAssets(path: String): Boolean {
-        return try {
-            val serializedString = assets.open(path).bufferedReader().use { it.readText() }
-            val json = Json {
-                ignoreUnknownKeys = true
-            }
-            val index = json.decodeFromString<DictionaryIndex>(serializedString)
-            
-            // Populate indices directly from serialized data
-            index.normalizedIndex.forEach { (normalized, entries) ->
-                normalizedIndex[normalized] = entries.map { it.toDictionaryEntry() }.toMutableList()
-            }
-            
-            index.prefixCache.forEach { (prefix, entries) ->
-                prefixCache[prefix] = entries.map { it.toDictionaryEntry() }.toMutableList()
-            }
-            
-            true
-        } catch (e: Exception) {
-            if (debugLogging) {
-                Log.d(tag, "Serialized dictionary not found or invalid: $path, falling back to JSON", e)
-            }
-            false
-        }
+        // Serialized dictionary loading not implemented - fall back to JSON
+        return false
     }
 
     /**
