@@ -14,7 +14,7 @@ data class SuggestionResult(
 
 class SuggestionEngine(
     private val repository: DictionaryRepository,
-    private val locale: Locale = Locale.ITALIAN,
+    private val locale: Locale = Locale.getDefault(),
     private val debugLogging: Boolean = false
 ) {
 

@@ -10,12 +10,13 @@ import java.util.Locale
 
 /**
  * Loads and indexes lightweight dictionaries from assets and merges them with the user dictionary.
+ * Supports multiple locales with fallback to English.
  */
 class DictionaryRepository(
     private val context: Context,
     private val assets: AssetManager,
     private val userDictionaryStore: UserDictionaryStore,
-    private val baseLocale: Locale = Locale.ITALIAN,
+    private val baseLocale: Locale = Locale.getDefault(),
     private val cachePrefixLength: Int = 4,
     debugLogging: Boolean = false
 ) {
@@ -28,6 +29,12 @@ class DictionaryRepository(
     private val tag = "DictionaryRepo"
     private val debugLogging: Boolean = debugLogging
 
+    // Available dictionaries (language code -> filename)
+    private val availableDictionaries = mapOf(
+        "en" to "en_base.json",
+        "it" to "it_base.json"
+    )
+
     fun loadIfNeeded() {
         if (isReady) return
         // Must not run on main thread
@@ -35,10 +42,19 @@ class DictionaryRepository(
         synchronized(this) {
             if (isReady || loadStarted) return
             loadStarted = true
-            val mainEntries = loadFromAssets("common/dictionaries/${baseLocale.language}_base.json")
+
+            // Try system language first, fall back to English
+            val language = baseLocale.language
+            val dictFile = availableDictionaries[language] ?: availableDictionaries["en"]
+            val mainEntries = if (dictFile != null) {
+                loadFromAssets("common/dictionaries/$dictFile")
+            } else {
+                emptyList()
+            }
+
             val userEntries = userDictionaryStore.loadUserEntries(context)
             if (debugLogging) {
-                Log.d(tag, "loadIfNeeded main=${mainEntries.size} user=${userEntries.size}")
+                Log.d(tag, "loadIfNeeded locale=$language dict=$dictFile main=${mainEntries.size} user=${userEntries.size}")
             }
             index(mainEntries + userEntries)
             isReady = true
