@@ -66,6 +66,7 @@ object SettingsManager {
     private const val DEFAULT_SUGGESTIONS_ENABLED = true
     private const val DEFAULT_ACCENT_MATCHING_ENABLED = true
     private const val DEFAULT_AUTO_REPLACE_ON_SPACE_ENTER = true
+    private const val DEFAULT_MAX_AUTO_REPLACE_DISTANCE = 1
     private const val DEFAULT_AUTO_CAPITALIZE_AFTER_PERIOD = true
     private const val DEFAULT_LONG_PRESS_MODIFIER = "alt"
     private const val DEFAULT_KEYBOARD_LAYOUT = "qwerty"

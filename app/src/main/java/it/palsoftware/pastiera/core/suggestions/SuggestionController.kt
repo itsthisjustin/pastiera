@@ -69,15 +69,7 @@ class SuggestionController(
         // User is typing new characters, clear any pending correction undo
         lastCorrection = null
         ensureDictionaryLoaded()
-        
-        // Clear last replacement if user types new characters
-        autoReplaceController.clearLastReplacement()
-        
-        // Clear rejected words when user types a new letter (allows re-correction)
-        if (text.isNotEmpty() && text.any { it.isLetterOrDigit() }) {
-            autoReplaceController.clearRejectedWords()
-        }
-        
+
         tracker.onCharacterCommitted(text)
         updateSuggestions()
     }
@@ -362,9 +354,9 @@ class SuggestionController(
      * Should be called during initialization to have dictionary ready when user focuses a field.
      */
     fun preloadDictionary() {
-        if (!dictionaryRepository.isReady && !dictionaryRepository.isLoadStarted) {
+        if (!symSpellEngine.isReady) {
             loadScope.launch {
-                dictionaryRepository.loadIfNeeded()
+                symSpellEngine.loadDictionary()
             }
         }
     }

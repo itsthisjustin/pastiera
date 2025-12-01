@@ -861,8 +861,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == "it.palsoftware.pastiera.ACTION_USER_DICTIONARY_UPDATED") {
                     Log.d(TAG, "User dictionary updated, refreshing...")
+                    // The personal dictionary is auto-refreshed via StateFlow in SuggestionController
                     if (::suggestionController.isInitialized) {
-                        suggestionController.refreshUserDictionary()
+                        suggestionController.onContextReset()
                     }
                 }
             }
@@ -1197,12 +1198,15 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     override fun onCurrentInputMethodSubtypeChanged(newSubtype: android.view.inputmethod.InputMethodSubtype) {
         super.onCurrentInputMethodSubtypeChanged(newSubtype)
         
+        // Locale-based dictionary switching is not supported in this implementation.
+        // The SymSpell engine uses a single dictionary file loaded at startup.
         if (::suggestionController.isInitialized) {
             val newLocale = getLocaleFromSubtype()
-            suggestionController.updateLocale(newLocale)
             if (Log.isLoggable(TAG, Log.DEBUG)) {
-                Log.d(TAG, "IME subtype changed, updating locale to: ${newLocale.language}")
+                Log.d(TAG, "IME subtype changed to: ${newLocale.language}")
             }
+            // Reset context to clear any pending suggestions
+            suggestionController.onContextReset()
         }
     }
     

@@ -549,16 +549,8 @@ private fun UserDictionaryScreen(
                         text = stringResource(R.string.user_dict_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .weight(1f)
+                        modifier = Modifier.padding(start = 8.dp)
                     )
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = stringResource(R.string.user_dict_add_button)
-                        )
-                    }
                 }
             }
         }
@@ -654,58 +646,6 @@ private fun UserDictionaryScreen(
                 }
             }
         }
-    }
-    
-    // Add word dialog
-    if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { 
-                showAddDialog = false
-                newWord = ""
-            },
-            title = {
-                Text(stringResource(R.string.user_dict_add_hint))
-            },
-            text = {
-                OutlinedTextField(
-                    value = newWord,
-                    onValueChange = { newWord = it },
-                    label = { Text(stringResource(R.string.user_dict_add_hint)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = {
-                        if (newWord.isNotBlank()) {
-                            IconButton(onClick = { newWord = "" }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Clear,
-                                    contentDescription = "Clear"
-                                )
-                            }
-                        }
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        addWord(newWord)
-                        showAddDialog = false
-                        newWord = ""
-                    },
-                    enabled = newWord.isNotBlank()
-                ) {
-                    Text(stringResource(R.string.user_dict_add_button))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { 
-                    showAddDialog = false
-                    newWord = ""
-                }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
-        )
     }
 }
 
