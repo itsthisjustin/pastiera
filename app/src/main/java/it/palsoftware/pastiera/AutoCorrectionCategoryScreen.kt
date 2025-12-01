@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
@@ -58,6 +59,9 @@ fun AutoCorrectionCategoryScreen(
     }
     var autoReplaceOnSpaceEnter by remember {
         mutableStateOf(SettingsManager.getAutoReplaceOnSpaceEnter(context))
+    }
+    var maxAutoReplaceDistance by remember {
+        mutableStateOf(SettingsManager.getMaxAutoReplaceDistance(context))
     }
     var navigationDirection by remember { mutableStateOf(LocalNavigationDirection.Push) }
     val navigationStack = remember {
@@ -140,14 +144,7 @@ fun AutoCorrectionCategoryScreen(
                                     text = stringResource(R.string.settings_category_auto_correction),
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .clickable {
-                                            experimentalTapCount++
-                                            if (experimentalTapCount >= 5) {
-                                                showExperimentalToggle = true
-                                            }
-                                        }
+                                    modifier = Modifier.padding(start = 8.dp)
                                 )
                             }
                         }
@@ -196,9 +193,46 @@ fun AutoCorrectionCategoryScreen(
                             }
                         }
 
-                        if (showExperimentalToggle) {
-                            // Experimental suggestions master toggle
+                        // Auto-Correction Languages (only if auto-correction is enabled)
+                        if (autoCorrectEnabled) {
                             Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(64.dp)
+                                    .clickable { navigateTo(AutoCorrectionDestination.Settings) }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Language,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.auto_correct_languages_title),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        // Experimental suggestions master toggle
+                        Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(64.dp)
@@ -242,52 +276,12 @@ fun AutoCorrectionCategoryScreen(
                                     )
                                 }
                             }
-                        }
-                    
-                        // Auto-Correction Languages (only if auto-correction is enabled)
-                        if (autoCorrectEnabled) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                                    .clickable { navigateTo(AutoCorrectionDestination.Settings) }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Language,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = stringResource(R.string.auto_correct_languages_title),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
 
-                        if (showExperimentalToggle) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                                    .clickable { navigateTo(AutoCorrectionDestination.UserDictionary) }
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .clickable { navigateTo(AutoCorrectionDestination.UserDictionary) }
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -317,14 +311,12 @@ fun AutoCorrectionCategoryScreen(
                                     )
                                 }
                             }
-                        }
 
-                        if (showExperimentalToggle) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                            ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                        ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -357,75 +349,128 @@ fun AutoCorrectionCategoryScreen(
                                 }
                             }
 
-                            Surface(
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                        ) {
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(64.dp)
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.TextFields,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = stringResource(R.string.auto_correct_accent_matching_title),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1
-                                        )
-                                    }
-                                    Switch(
-                                        checked = accentMatchingEnabled,
-                                        onCheckedChange = { enabled ->
-                                            accentMatchingEnabled = enabled
-                                            SettingsManager.setAccentMatchingEnabled(context, enabled)
-                                        },
-                                        enabled = experimentalSuggestionsEnabled
+                                Icon(
+                                    imageVector = Icons.Filled.TextFields,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.auto_correct_accent_matching_title),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1
                                     )
                                 }
+                                Switch(
+                                    checked = accentMatchingEnabled,
+                                    onCheckedChange = { enabled ->
+                                        accentMatchingEnabled = enabled
+                                        SettingsManager.setAccentMatchingEnabled(context, enabled)
+                                    },
+                                    enabled = experimentalSuggestionsEnabled
+                                )
                             }
+                        }
 
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.TextFields,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.auto_correct_auto_replace_title),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1
+                                    )
+                                }
+                                Switch(
+                                    checked = autoReplaceOnSpaceEnter,
+                                    onCheckedChange = { enabled ->
+                                        autoReplaceOnSpaceEnter = enabled
+                                        SettingsManager.setAutoReplaceOnSpaceEnter(context, enabled)
+                                    }
+                                )
+                            }
+                        }
+
+                        // Max auto-replace distance slider (only shown when auto-replace is enabled)
+                        if (autoReplaceOnSpaceEnter) {
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(64.dp)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.TextFields,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Text(
-                                            text = stringResource(R.string.auto_correct_auto_replace_title),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1
+                                            text = stringResource(R.string.auto_correct_max_distance_title),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = if (maxAutoReplaceDistance == 0) {
+                                                stringResource(R.string.auto_correct_max_distance_off)
+                                            } else {
+                                                maxAutoReplaceDistance.toString()
+                                            },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
-                                    Switch(
-                                        checked = autoReplaceOnSpaceEnter,
-                                        onCheckedChange = { enabled ->
-                                            autoReplaceOnSpaceEnter = enabled
-                                            SettingsManager.setAutoReplaceOnSpaceEnter(context, enabled)
-                                        }
+                                    Slider(
+                                        value = maxAutoReplaceDistance.toFloat(),
+                                        onValueChange = { value ->
+                                            val newValue = value.toInt().coerceIn(0, 3)
+                                            maxAutoReplaceDistance = newValue
+                                            SettingsManager.setMaxAutoReplaceDistance(context, newValue)
+                                        },
+                                        valueRange = 0f..3f,
+                                        steps = 2, // 0, 1, 2, 3 = 3 steps
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.auto_correct_max_distance_description),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -504,8 +549,16 @@ private fun UserDictionaryScreen(
                         text = stringResource(R.string.user_dict_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 8.dp)
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .weight(1f)
                     )
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.user_dict_add_button)
+                        )
+                    }
                 }
             }
         }
@@ -601,6 +654,58 @@ private fun UserDictionaryScreen(
                 }
             }
         }
+    }
+    
+    // Add word dialog
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showAddDialog = false
+                newWord = ""
+            },
+            title = {
+                Text(stringResource(R.string.user_dict_add_hint))
+            },
+            text = {
+                OutlinedTextField(
+                    value = newWord,
+                    onValueChange = { newWord = it },
+                    label = { Text(stringResource(R.string.user_dict_add_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        if (newWord.isNotBlank()) {
+                            IconButton(onClick = { newWord = "" }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Clear,
+                                    contentDescription = "Clear"
+                                )
+                            }
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        addWord(newWord)
+                        showAddDialog = false
+                        newWord = ""
+                    },
+                    enabled = newWord.isNotBlank()
+                ) {
+                    Text(stringResource(R.string.user_dict_add_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showAddDialog = false
+                    newWord = ""
+                }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
     }
 }
 

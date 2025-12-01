@@ -18,7 +18,9 @@ class SuggestionEngine(
     private val debugLogging: Boolean = false
 ) {
 
-    private val normalizeRegex = "[^a-z]".toRegex()
+    // Keep only Unicode letters (supports Latin, Cyrillic, Greek, Arabic, Chinese, etc.)
+    // Removes: punctuation, numbers, spaces, emoji, symbols
+    private val normalizeRegex = "[^\\p{L}]".toRegex()
     private val accentCache: MutableMap<String, String> = mutableMapOf()
     private val tag = "SuggestionEngine"
     private val wordNormalizeCache: MutableMap<String, String> = mutableMapOf()
@@ -31,8 +33,8 @@ class SuggestionEngine(
         if (currentWord.isBlank()) return emptyList()
         if (!repository.isReady) return emptyList()
         val normalizedWord = normalize(currentWord)
-        // Require at least 2 characters to avoid heavy buckets on large dictionaries.
-        if (normalizedWord.length < 2) return emptyList()
+        // Require at least 1 character to start suggesting.
+        if (normalizedWord.length < 1) return emptyList()
 
         // Generate prefix variants to catch transpositions (e.g., "teh" -> also check "the", "eth")
         val prefixVariants = generatePrefixVariants(normalizedWord)
