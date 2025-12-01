@@ -16,6 +16,8 @@ import java.util.Locale
 /**
  * Spelling suggestion engine powered by SymSpell algorithm.
  * SymSpell provides fast, accurate spelling correction using symmetric delete algorithm.
+ *
+ * The dictionary is cached statically so it persists across IME recreations.
  */
 class SymSpellEngine(
     private val assets: AssetManager,
@@ -23,25 +25,31 @@ class SymSpellEngine(
 ) {
     companion object {
         private const val TAG = "SymSpellEngine"
-        private const val DICTIONARY_PATH = "dictionaries/en-80k.fdic"
+        // AOSP dictionary with texting abbreviations (76k words)
+        private const val DICTIONARY_PATH = "dictionaries/en_aosp.fdic"
+
+        // Static cache - survives IME recreations
+        @Volatile
+        private var cachedSpellChecker: SpellChecker? = null
+        private val loadMutex = Mutex()
+
+        @Volatile
+        private var isLoaded: Boolean = false
     }
 
-    private var spellChecker: SpellChecker? = null
-    private val loadMutex = Mutex()
-
-    @Volatile
-    var isReady: Boolean = false
-        private set
+    val isReady: Boolean
+        get() = isLoaded
 
     /**
      * Load the dictionary. Must be called from a background thread.
+     * Dictionary is cached statically so subsequent calls are instant.
      */
     suspend fun loadDictionary() = withContext(Dispatchers.IO) {
-        if (isReady) return@withContext
+        if (isLoaded) return@withContext
 
         loadMutex.withLock {
             // Double-check after acquiring lock
-            if (isReady) return@withContext
+            if (isLoaded) return@withContext
 
             try {
                 val settings = SpellCheckSettings(
@@ -54,16 +62,15 @@ class SymSpellEngine(
 
                 // Load dictionary from fdic binary format (70% faster than txt)
                 val startTime = System.currentTimeMillis()
-                val fdicBytes = assets.open(DICTIONARY_PATH).use { it.readBytes() }
-                checker.dictionary.loadFdicFile(fdicBytes)
+
+                val dictBytes = assets.open(DICTIONARY_PATH).use { it.readBytes() }
+                checker.dictionary.loadFdicFile(dictBytes)
 
                 val loadTime = System.currentTimeMillis() - startTime
-                if (debugLogging) {
-                    Log.d(TAG, "Dictionary loaded in ${loadTime}ms")
-                }
+                Log.d(TAG, "Dictionary loaded in ${loadTime}ms (76k words)")
 
-                spellChecker = checker
-                isReady = true
+                cachedSpellChecker = checker
+                isLoaded = true
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load dictionary", e)
@@ -83,10 +90,13 @@ class SymSpellEngine(
             return emptyList()
         }
 
-        val checker = spellChecker ?: return emptyList()
+        val checker = cachedSpellChecker ?: return emptyList()
 
         return try {
-            val suggestions = checker.lookup(word.lowercase(Locale.getDefault()), Verbosity.Closest, maxSuggestions.toDouble())
+            // Third param is maxEditDistance (must be <= settings.maxEditDistance of 2.0)
+            // Use Verbosity.Closest to get best matches, then take maxSuggestions
+            val suggestions = checker.lookup(word.lowercase(Locale.getDefault()), Verbosity.Closest, 2.0)
+                .take(maxSuggestions)
 
             if (debugLogging) {
                 Log.d(TAG, "suggest('$word') -> ${suggestions.map { "${it.term}:${it.distance}" }}")
@@ -112,11 +122,12 @@ class SymSpellEngine(
     fun isKnownWord(word: String): Boolean {
         if (!isReady || word.isBlank()) return false
 
-        val checker = spellChecker ?: return false
+        val checker = cachedSpellChecker ?: return false
 
         return try {
-            val suggestions = checker.lookup(word.lowercase(Locale.getDefault()), Verbosity.Closest, 1.0)
-            suggestions.isNotEmpty() && suggestions[0].distance == 0.0
+            // Use edit distance 0 to check for exact matches only
+            val suggestions = checker.lookup(word.lowercase(Locale.getDefault()), Verbosity.Closest, 0.0)
+            suggestions.isNotEmpty()
         } catch (e: Exception) {
             false
         }

@@ -40,11 +40,31 @@ class SuggestionController(
     private var cursorRunnable: Runnable? = null
     private val cursorDebounceMs = 120L
 
+    // Track last autocorrection for undo on backspace
+    private data class LastCorrection(
+        val original: String,
+        val replacement: String,
+        val boundaryChar: Char?
+    )
+    private var lastCorrection: LastCorrection? = null
+
+    // Words the user has rejected via backspace - don't autocorrect these
+    private val ignoredWords = mutableSetOf<String>()
+
     var suggestionsListener: ((List<SuggestionResult>) -> Unit)? = onSuggestionsUpdated
+
+    init {
+        // Eagerly start loading the dictionary in the background
+        loadScope.launch {
+            symSpellEngine.loadDictionary()
+        }
+    }
 
     fun onCharacterCommitted(text: CharSequence, inputConnection: InputConnection?) {
         if (!isEnabled()) return
         if (debugLogging) Log.d("PastieraIME", "SuggestionController.onCharacterCommitted('$text')")
+        // User is typing new characters, clear any pending correction undo
+        lastCorrection = null
         ensureDictionaryLoaded()
         tracker.onCharacterCommitted(text)
         updateSuggestions()
@@ -54,6 +74,49 @@ class SuggestionController(
         if (!isEnabled()) return
         tracker.onBackspace()
         updateSuggestions()
+    }
+
+    /**
+     * Handle backspace key. Returns true if an autocorrection was undone.
+     */
+    fun onBackspace(inputConnection: InputConnection?): Boolean {
+        if (!isEnabled() || inputConnection == null) return false
+
+        val correction = lastCorrection
+        if (correction != null) {
+            // User is undoing the autocorrection
+            if (debugLogging) {
+                Log.d("PastieraIME", "Undoing autocorrection: '${correction.replacement}' -> '${correction.original}'")
+            }
+
+            inputConnection.beginBatchEdit()
+
+            // Delete the replacement + boundary char
+            val deleteLen = correction.replacement.length + (if (correction.boundaryChar != null) 1 else 0)
+            inputConnection.deleteSurroundingText(deleteLen, 0)
+
+            // Restore original word + boundary char
+            val restoreText = correction.original + (correction.boundaryChar?.toString() ?: "")
+            inputConnection.commitText(restoreText, 1)
+
+            inputConnection.endBatchEdit()
+
+            // Add to ignored words so we don't correct it again
+            ignoredWords.add(correction.original.lowercase())
+            if (debugLogging) {
+                Log.d("PastieraIME", "Added '${correction.original}' to ignored words")
+            }
+
+            lastCorrection = null
+            tracker.reset()
+            suggestionsListener?.invoke(emptyList())
+
+            return true
+        }
+
+        // No correction to undo, clear any pending correction state
+        lastCorrection = null
+        return false
     }
 
     private fun updateSuggestions() {
@@ -104,6 +167,25 @@ class SuggestionController(
             return ReplaceResult(false, unicodeChar != 0)
         }
 
+        // Special case: "i" -> "I"
+        if (word == "i" && !ignoredWords.contains("i")) {
+            if (debugLogging) {
+                Log.d("PastieraIME", "onBoundaryKey: replacing 'i' -> 'I'")
+            }
+            inputConnection.beginBatchEdit()
+            inputConnection.deleteSurroundingText(1, 0)
+            inputConnection.commitText("I", 1)
+            tracker.reset()
+            inputConnection.endBatchEdit()
+            if (boundaryChar != null) {
+                inputConnection.commitText(boundaryChar.toString(), 1)
+            }
+            lastCorrection = LastCorrection("i", "I", boundaryChar)
+            NotificationHelper.triggerHapticFeedback(appContext)
+            suggestionsListener?.invoke(emptyList())
+            return ReplaceResult(true, true)
+        }
+
         val suggestions = symSpellEngine.suggest(word, maxSuggestions = 1)
         val top = suggestions.firstOrNull()
         val isKnown = symSpellEngine.isKnownWord(word)
@@ -112,7 +194,13 @@ class SuggestionController(
             Log.d("PastieraIME", "onBoundaryKey: top=${top?.candidate}:${top?.distance} isKnown=$isKnown maxDist=${settings.maxAutoReplaceDistance}")
         }
 
-        val shouldReplace = top != null && !isKnown && top.distance <= settings.maxAutoReplaceDistance
+        // Check if this word is in the ignored list (user rejected autocorrection before)
+        val isIgnored = ignoredWords.contains(word.lowercase())
+        val shouldReplace = top != null && !isKnown && !isIgnored && top.distance <= settings.maxAutoReplaceDistance
+
+        if (debugLogging && isIgnored) {
+            Log.d("PastieraIME", "onBoundaryKey: '$word' is in ignored list, skipping autocorrection")
+        }
 
         if (shouldReplace && top != null) {
             val replacement = applyCasing(top.candidate, word)
@@ -127,10 +215,17 @@ class SuggestionController(
             if (boundaryChar != null) {
                 inputConnection.commitText(boundaryChar.toString(), 1)
             }
+
+            // Save this correction so it can be undone with backspace
+            lastCorrection = LastCorrection(word, replacement, boundaryChar)
+
             NotificationHelper.triggerHapticFeedback(appContext)
             suggestionsListener?.invoke(emptyList())
             return ReplaceResult(true, true)
         }
+
+        // No replacement made, clear any pending correction
+        lastCorrection = null
 
         tracker.onBoundaryReached(boundaryChar, inputConnection)
         suggestionsListener?.invoke(emptyList())
@@ -176,6 +271,12 @@ class SuggestionController(
     fun onContextReset() {
         if (!isEnabled()) return
         tracker.onContextChanged()
+        lastCorrection = null
+        // Clear ignored words when switching contexts (new text field, etc.)
+        if (debugLogging && ignoredWords.isNotEmpty()) {
+            Log.d("PastieraIME", "onContextReset: clearing ignored words: $ignoredWords")
+        }
+        ignoredWords.clear()
         suggestionsListener?.invoke(emptyList())
     }
 

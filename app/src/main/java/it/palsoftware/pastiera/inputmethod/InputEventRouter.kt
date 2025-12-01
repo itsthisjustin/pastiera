@@ -597,8 +597,12 @@ class InputEventRouter(
             return true
         }
 
-        // Refresh suggestions on DEL (if suggestions enabled)
+        // Handle backspace - first try to undo autocorrection, then refresh suggestions
         if (keyCode == KeyEvent.KEYCODE_DEL && !shouldDisableSuggestions && inputConnection != null) {
+            // Try to undo last autocorrection; if successful, consume the key event
+            if (suggestionController?.onBackspace(inputConnection) == true) {
+                return true
+            }
             suggestionController?.refreshFromInputConnection(inputConnection)
         }
 
