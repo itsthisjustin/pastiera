@@ -143,9 +143,12 @@
 
     <!-- User dictionary management -->
     <string name="user_dict_title">User dictionary</string>
-    <string name="user_dict_add_hint">Add a word</string>
-    <string name="user_dict_add_button">Save word</string>
-    <string name="user_dict_empty_state">No user words saved yet.</string>
+    <string name="user_dict_add_hint">Word to match</string>
+    <string name="user_dict_replacement_hint">Replacement (optional)</string>
+    <string name="user_dict_replacement_placeholder">Leave empty to skip correction</string>
+    <string name="user_dict_add_button">Add</string>
+    <string name="user_dict_empty_state">No entries yet. Add words to customize autocorrection.</string>
+    <string name="user_dict_no_correction">Won\'t be autocorrected</string>
     <string name="user_dict_frequency_label">Uses: %1$d</string>
     
     <!-- SYM Customization Screen -->

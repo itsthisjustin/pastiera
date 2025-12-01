@@ -25,6 +25,7 @@ class SuggestionController(
     private val appContext = context.applicationContext
     private val debugLogging: Boolean = debugLogging
     private val symSpellEngine = SymSpellEngine(assets, debugLogging = debugLogging)
+    private val personalDictionary = PersonalDictionary.getInstance(context)
     private val tracker = CurrentWordTracker(
         onWordChanged = { word ->
             val settings = settingsProvider()
@@ -167,8 +168,51 @@ class SuggestionController(
             return ReplaceResult(false, unicodeChar != 0)
         }
 
+        // Check if this word was rejected via backspace undo
+        val isIgnored = ignoredWords.contains(word.lowercase())
+        if (isIgnored) {
+            if (debugLogging) {
+                Log.d("PastieraIME", "onBoundaryKey: '$word' is in ignored list, skipping autocorrection")
+            }
+            tracker.onBoundaryReached(boundaryChar, inputConnection)
+            suggestionsListener?.invoke(emptyList())
+            return ReplaceResult(false, unicodeChar != 0)
+        }
+
+        // Check personal dictionary first - it has priority over SymSpell
+        val personalEntry = personalDictionary.getEntry(word)
+        if (personalEntry != null) {
+            if (personalEntry.replacement != null) {
+                // User defined a custom replacement - apply it (case-sensitive)
+                val replacement = personalEntry.replacement
+                if (debugLogging) {
+                    Log.d("PastieraIME", "onBoundaryKey: personal dict replacing '$word' -> '$replacement'")
+                }
+                inputConnection.beginBatchEdit()
+                inputConnection.deleteSurroundingText(word.length, 0)
+                inputConnection.commitText(replacement, 1)
+                tracker.reset()
+                inputConnection.endBatchEdit()
+                if (boundaryChar != null) {
+                    inputConnection.commitText(boundaryChar.toString(), 1)
+                }
+                lastCorrection = LastCorrection(word, replacement, boundaryChar)
+                NotificationHelper.triggerHapticFeedback(appContext)
+                suggestionsListener?.invoke(emptyList())
+                return ReplaceResult(true, true)
+            } else {
+                // Word is in personal dict with no replacement - don't autocorrect
+                if (debugLogging) {
+                    Log.d("PastieraIME", "onBoundaryKey: '$word' is in personal dictionary (no replacement), skipping autocorrection")
+                }
+                tracker.onBoundaryReached(boundaryChar, inputConnection)
+                suggestionsListener?.invoke(emptyList())
+                return ReplaceResult(false, unicodeChar != 0)
+            }
+        }
+
         // Special case: "i" -> "I"
-        if (word == "i" && !ignoredWords.contains("i")) {
+        if (word == "i") {
             if (debugLogging) {
                 Log.d("PastieraIME", "onBoundaryKey: replacing 'i' -> 'I'")
             }
@@ -194,13 +238,7 @@ class SuggestionController(
             Log.d("PastieraIME", "onBoundaryKey: top=${top?.candidate}:${top?.distance} isKnown=$isKnown maxDist=${settings.maxAutoReplaceDistance}")
         }
 
-        // Check if this word is in the ignored list (user rejected autocorrection before)
-        val isIgnored = ignoredWords.contains(word.lowercase())
-        val shouldReplace = top != null && !isKnown && !isIgnored && top.distance <= settings.maxAutoReplaceDistance
-
-        if (debugLogging && isIgnored) {
-            Log.d("PastieraIME", "onBoundaryKey: '$word' is in ignored list, skipping autocorrection")
-        }
+        val shouldReplace = top != null && !isKnown && top.distance <= settings.maxAutoReplaceDistance
 
         if (shouldReplace && top != null) {
             val replacement = applyCasing(top.candidate, word)

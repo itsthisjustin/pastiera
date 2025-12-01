@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -22,12 +23,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import it.palsoftware.pastiera.R
-import it.palsoftware.pastiera.core.suggestions.UserDictionaryStore
+import it.palsoftware.pastiera.core.suggestions.PersonalDictionary
 
 /**
  * Auto-correction category screen.
@@ -472,13 +475,10 @@ private fun UserDictionaryScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val store = remember { UserDictionaryStore() }
+    val personalDictionary = remember { PersonalDictionary.getInstance(context) }
     var newWord by remember { mutableStateOf("") }
-    var entries by remember { mutableStateOf(store.loadUserEntries(context)) }
-
-    fun refreshEntries() {
-        entries = store.loadUserEntries(context)
-    }
+    var newReplacement by remember { mutableStateOf("") }
+    val entries by personalDictionary.entries.collectAsState()
 
     Scaffold(
         topBar = {
@@ -517,20 +517,35 @@ private fun UserDictionaryScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Word input
             OutlinedTextField(
                 value = newWord,
                 onValueChange = { newWord = it },
                 label = { Text(stringResource(R.string.user_dict_add_hint)) },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Replacement input (optional)
+            OutlinedTextField(
+                value = newReplacement,
+                onValueChange = { newReplacement = it },
+                label = { Text(stringResource(R.string.user_dict_replacement_hint)) },
+                placeholder = { Text(stringResource(R.string.user_dict_replacement_placeholder)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Button(
                 onClick = {
-                    val trimmed = newWord.trim()
-                    if (trimmed.isNotEmpty()) {
-                        store.addWord(context, trimmed)
+                    val trimmedWord = newWord.trim()
+                    val trimmedReplacement = newReplacement.trim().takeIf { it.isNotEmpty() }
+                    if (trimmedWord.isNotEmpty()) {
+                        personalDictionary.addEntry(trimmedWord, trimmedReplacement)
                         newWord = ""
-                        refreshEntries()
+                        newReplacement = ""
                     }
                 },
                 enabled = newWord.isNotBlank()
@@ -546,7 +561,7 @@ private fun UserDictionaryScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
-                entries.forEach { entry ->
+                entries.values.sortedBy { it.word.lowercase() }.forEach { entry ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         tonalElevation = 1.dp
@@ -559,19 +574,25 @@ private fun UserDictionaryScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = entry.word, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    text = stringResource(
-                                        R.string.user_dict_frequency_label,
-                                        entry.frequency
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (entry.replacement != null) {
+                                    Text(
+                                        text = "${entry.word} → ${entry.replacement}",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                } else {
+                                    Text(
+                                        text = entry.word,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.user_dict_no_correction),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             IconButton(onClick = {
-                                store.removeWord(context, entry.word)
-                                refreshEntries()
+                                personalDictionary.removeWord(entry.word)
                             }) {
                                 Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
                             }
