@@ -121,6 +121,21 @@ android {
         }
     }
     
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            if (variant.buildType.name == "release") {
+                // Generate unique filename with timestamp for each release
+                val dateFormat = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US)
+                val timestamp = dateFormat.format(Date())
+
+                // Include timestamp in filename: Pastiera-0.66beta-20251201-1909.apk
+                output.outputFileName = "Pastiera-${variant.versionName}-${timestamp}.apk"
+            }
+        }
+    }
+    
     lint {
         checkReleaseBuilds = false
         abortOnError = false
