@@ -178,65 +178,15 @@ class SymSpellEngine(
     /**
      * Check if a word is in the dictionary using Android's native spell checker.
      * Falls back to SymSpell if native checker is unavailable.
+     *
+     * Note: Native spell checker is unreliable on some devices, so we primarily
+     * use SymSpell with smart heuristics as fallback.
      */
     fun isKnownWord(word: String): Boolean {
         if (!isReady || word.isBlank()) return false
 
-        // Try using native Android spell checker first
-        val session = nativeSpellCheckerSession
-        if (session != null) {
-            return try {
-                val textInfo = TextInfo(word)
-                val latch = CountDownLatch(1)
-                val result = AtomicReference<Boolean>(false)
-
-                // Use async API with callback
-                val listener = object : SpellCheckerSession.SpellCheckerSessionListener {
-                    override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
-                        if (results != null && results.isNotEmpty()) {
-                            val info = results[0]
-                            val isInDictionary = (info.suggestionsAttributes and SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY) != 0
-                            result.set(isInDictionary)
-                        }
-                        latch.countDown()
-                    }
-
-                    override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
-                        latch.countDown()
-                    }
-                }
-
-                // Create temporary session for this check
-                val tempSession = textServicesManager?.newSpellCheckerSession(
-                    null,
-                    Locale.getDefault(),
-                    listener,
-                    false
-                )
-
-                tempSession?.getSuggestions(textInfo, 5)
-
-                // Wait up to 100ms for result
-                val gotResult = latch.await(100, TimeUnit.MILLISECONDS)
-                tempSession?.close()
-
-                val isInDictionary = if (gotResult) result.get() else false
-
-                if (debugLogging) {
-                    Log.d(TAG, "isKnownWord('$word') -> $isInDictionary (native spell checker, gotResult=$gotResult)")
-                }
-
-                return isInDictionary
-            } catch (e: Exception) {
-                if (debugLogging) {
-                    Log.w(TAG, "Native spell checker failed for '$word', falling back to SymSpell", e)
-                }
-                // Fall back to SymSpell check
-                isKnownWordSymSpell(word)
-            }
-        }
-
-        // Fallback to SymSpell if native checker unavailable
+        // Directly use SymSpell with improved heuristics
+        // The native spell checker is too slow and unreliable for real-time autocorrect
         return isKnownWordSymSpell(word)
     }
 
@@ -255,7 +205,45 @@ class SymSpellEngine(
             val isKnown = suggestions.any { it.term == normalized && it.distance == 0.0 }
 
             if (debugLogging) {
-                Log.d(TAG, "isKnownWord('$word') -> $isKnown (SymSpell fallback)")
+                val sugList = suggestions.take(3).joinToString { "${it.term}:${it.distance}" }
+                Log.d(TAG, "isKnownWord('$word') -> $isKnown (SymSpell fallback, suggestions: $sugList)")
+            }
+
+            // If word is not found but is reasonably long and alphabetic, apply heuristics
+            // This handles cases where common words aren't in the 30k dictionary
+            if (!isKnown && word.length >= 4 && word.all { it.isLetter() }) {
+                val topSuggestion = suggestions.firstOrNull()
+
+                // Case 1: No suggestions at all - likely a valid word
+                if (topSuggestion == null) {
+                    if (debugLogging) {
+                        Log.d(TAG, "Word '$word' not in dictionary but no suggestions - treating as valid")
+                    }
+                    return true
+                }
+
+                // Case 2: Top suggestion is very far (distance >= 2) - likely valid word
+                if (topSuggestion.distance >= 2.0) {
+                    if (debugLogging) {
+                        Log.d(TAG, "Word '$word' not in dictionary, closest is '${topSuggestion.term}':${topSuggestion.distance} - treating as valid")
+                    }
+                    return true
+                }
+
+                // Case 3: Check if suggestion has much higher frequency
+                // If user typed word is not in dictionary but suggestion has very high frequency (1000+),
+                // AND they're similar (distance 1), it might be a real typo
+                // But if frequencies are similar, user's word is probably valid
+                if (topSuggestion.distance == 1.0) {
+                    // Get frequency of suggestions to make a judgment
+                    if (topSuggestion.frequency < 1000) {
+                        // Low frequency suggestion - user's word might be equally valid
+                        if (debugLogging) {
+                            Log.d(TAG, "Word '$word' vs '${topSuggestion.term}' (freq:${topSuggestion.frequency}) - treating as valid")
+                        }
+                        return true
+                    }
+                }
             }
 
             isKnown
