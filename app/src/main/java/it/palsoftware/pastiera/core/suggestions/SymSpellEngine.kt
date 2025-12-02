@@ -137,7 +137,7 @@ class SymSpellEngine(
      *
      * @param word The word to check
      * @param maxSuggestions Maximum number of suggestions to return
-     * @return List of suggestions sorted by relevance
+     * @return List of suggestions sorted by relevance (keyboard-aware)
      */
     fun suggest(word: String, maxSuggestions: Int = 3): List<SuggestionResult> {
         if (!isReady || word.isBlank() || word.length < 2) {
@@ -147,23 +147,28 @@ class SymSpellEngine(
         val checker = cachedSpellChecker ?: return emptyList()
 
         return try {
-            // Third param is maxEditDistance (must be <= settings.maxEditDistance of 2.0)
-            // Use Verbosity.Closest to get best matches, then take maxSuggestions
+            // Get more candidates than needed for re-ranking
+            val candidateCount = maxSuggestions * 3
             val suggestions = checker.lookup(word.lowercase(Locale.getDefault()), Verbosity.Closest, 2.0)
+                .take(candidateCount)
+                .map { item ->
+                    SuggestionResult(
+                        candidate = item.term,
+                        distance = item.distance.toInt(),
+                        score = item.frequency,
+                        source = SuggestionSource.MAIN
+                    )
+                }
+
+            // Re-rank using keyboard proximity
+            val reRanked = KeyboardProximity.reRankSuggestions(word, suggestions)
                 .take(maxSuggestions)
 
             if (debugLogging) {
-                Log.d(TAG, "suggest('$word') -> ${suggestions.map { "${it.term}:${it.distance}" }}")
+                Log.d(TAG, "suggest('$word') -> ${reRanked.map { "${it.candidate}" }} (keyboard-aware)")
             }
 
-            suggestions.map { item ->
-                SuggestionResult(
-                    candidate = item.term,
-                    distance = item.distance.toInt(),
-                    score = item.frequency,
-                    source = SuggestionSource.MAIN
-                )
-            }
+            reRanked
         } catch (e: Exception) {
             Log.e(TAG, "Error getting suggestions for '$word'", e)
             emptyList()
