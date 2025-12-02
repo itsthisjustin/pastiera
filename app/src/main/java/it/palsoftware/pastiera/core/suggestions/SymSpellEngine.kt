@@ -287,17 +287,26 @@ class SymSpellEngine(
             // Get best (highest frequency) from each category, filtering by distance 1 first
             val dist1Insert = byEditType[EditType.INSERT]?.filter { it.distance <= 1.0 }?.maxByOrNull { it.frequency }
 
-            // For substitutes: filter out distant key substitutions, prefer ones that fix duplicates
+            // For substitutes: filter out distant key substitutions, prefer adjacent keys
             val dist1Substitutes = byEditType[EditType.SUBSTITUTE]
                 ?.filter { it.distance <= 1.0 }
                 ?.filter { isNearbySubstitution(normalizedWord, it.term) }  // Filter out distant keys like m→w
 
+            // Prefer adjacent key substitutes (dist <= 1.15) over non-adjacent
+            // e.g., "hust" -> "just" (h->j adjacent) over "must" (h->m not adjacent)
+            val adjacentSubstitutes = dist1Substitutes?.filter { isAdjacentSubstitution(normalizedWord, it.term) }
+            val nonAdjacentSubstitutes = dist1Substitutes?.filter { !isAdjacentSubstitution(normalizedWord, it.term) }
+
             val dist1Substitute = if (hasAdjacentDuplicates(normalizedWord) && dist1Substitutes != null) {
-                // First try to find one that fixes a duplicate letter
-                dist1Substitutes.filter { fixesDuplicateLetter(normalizedWord, it.term) }.maxByOrNull { it.frequency }
-                    ?: dist1Substitutes.maxByOrNull { it.frequency }
+                // First try to find one that fixes a duplicate letter (from adjacent first, then non-adjacent)
+                adjacentSubstitutes?.filter { fixesDuplicateLetter(normalizedWord, it.term) }?.maxByOrNull { it.frequency }
+                    ?: nonAdjacentSubstitutes?.filter { fixesDuplicateLetter(normalizedWord, it.term) }?.maxByOrNull { it.frequency }
+                    ?: adjacentSubstitutes?.maxByOrNull { it.frequency }
+                    ?: nonAdjacentSubstitutes?.maxByOrNull { it.frequency }
             } else {
-                dist1Substitutes?.maxByOrNull { it.frequency }
+                // Prefer adjacent substitutes, fall back to non-adjacent
+                adjacentSubstitutes?.maxByOrNull { it.frequency }
+                    ?: nonAdjacentSubstitutes?.maxByOrNull { it.frequency }
             }
 
             val dist1Delete = if (hasAdjacentDuplicates(normalizedWord)) {
@@ -308,14 +317,19 @@ class SymSpellEngine(
 
             // Fallback to distance 2 if no distance 1 options
             val bestInsert = dist1Insert ?: byEditType[EditType.INSERT]?.maxByOrNull { it.frequency }
-            // Also filter out distant key substitutions in fallback
+            // Also filter and prefer adjacent key substitutions in fallback
             val allSubstitutes = byEditType[EditType.SUBSTITUTE]
                 ?.filter { isNearbySubstitution(normalizedWord, it.term) }
+            val allAdjacentSubs = allSubstitutes?.filter { isAdjacentSubstitution(normalizedWord, it.term) }
+            val allNonAdjacentSubs = allSubstitutes?.filter { !isAdjacentSubstitution(normalizedWord, it.term) }
             val bestSubstitute = dist1Substitute ?: if (hasAdjacentDuplicates(normalizedWord) && allSubstitutes != null) {
-                allSubstitutes.filter { fixesDuplicateLetter(normalizedWord, it.term) }.maxByOrNull { it.frequency }
-                    ?: allSubstitutes.maxByOrNull { it.frequency }
+                allAdjacentSubs?.filter { fixesDuplicateLetter(normalizedWord, it.term) }?.maxByOrNull { it.frequency }
+                    ?: allNonAdjacentSubs?.filter { fixesDuplicateLetter(normalizedWord, it.term) }?.maxByOrNull { it.frequency }
+                    ?: allAdjacentSubs?.maxByOrNull { it.frequency }
+                    ?: allNonAdjacentSubs?.maxByOrNull { it.frequency }
             } else {
-                allSubstitutes?.maxByOrNull { it.frequency }
+                allAdjacentSubs?.maxByOrNull { it.frequency }
+                    ?: allNonAdjacentSubs?.maxByOrNull { it.frequency }
             }
             val bestDelete = dist1Delete ?: if (hasAdjacentDuplicates(normalizedWord)) {
                 byEditType[EditType.DELETE]?.maxByOrNull { it.frequency }
