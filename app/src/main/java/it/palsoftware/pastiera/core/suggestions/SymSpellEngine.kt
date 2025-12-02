@@ -39,7 +39,7 @@ class SymSpellEngine(
     companion object {
         private const val TAG = "SymSpellEngine"
         // SymSpell 30k dictionary (fast loading, ~130KB)
-        private const val DICTIONARY_PATH = "dictionaries/en_30k.fdic"
+        private const val DICTIONARY_PATH = "dictionaries/en_80k.fdic"
 
         // Static cache - survives IME recreations
         @Volatile
@@ -161,10 +161,8 @@ class SymSpellEngine(
         val checker = cachedSpellChecker ?: return emptyList()
 
         return try {
-            // Get more candidates than needed for re-ranking
-            val candidateCount = maxSuggestions * 3
             val suggestions = checker.lookup(word.lowercase(Locale.getDefault()), Verbosity.Closest, 2.0)
-                .take(candidateCount)
+                .take(maxSuggestions)
                 .map { item ->
                     SuggestionResult(
                         candidate = item.term,
@@ -174,15 +172,11 @@ class SymSpellEngine(
                     )
                 }
 
-            // Re-rank using keyboard proximity
-            val reRanked = KeyboardProximity.reRankSuggestions(word, suggestions)
-                .take(maxSuggestions)
-
             if (debugLogging) {
-                Log.d(TAG, "suggest('$word') -> ${reRanked.map { "${it.candidate}" }} (keyboard-aware)")
+                Log.d(TAG, "suggest('$word') -> ${suggestions.map { "${it.candidate}" }}")
             }
 
-            reRanked
+            suggestions
         } catch (e: Exception) {
             Log.e(TAG, "Error getting suggestions for '$word'", e)
             emptyList()
@@ -190,26 +184,16 @@ class SymSpellEngine(
     }
 
     /**
-     * Check if a word is correctly spelled using Android's native spell checker.
-     * Falls back to SymSpell if native checker is unavailable.
+     * Check if a word is correctly spelled using SymSpell dictionary.
+     * A word is known if it exists with edit distance 0 in the dictionary.
      *
      * @param word The word to check
      * @return true if the word is spelled correctly, false if misspelled
      */
     fun isKnownWord(word: String): Boolean {
         if (word.isBlank()) return true // Empty words are "correct"
+        if (!isReady) return true // Assume correct if dictionary not ready
 
-        // Try native spell checker first (more comprehensive dictionary)
-        val nativeResult = isKnownWordNative(word)
-        if (nativeResult != null) {
-            if (debugLogging) {
-                Log.d(TAG, "isKnownWord('$word') -> $nativeResult (native spell checker)")
-            }
-            return nativeResult
-        }
-
-        // Fall back to SymSpell if native checker unavailable
-        if (!isReady) return true // Assume correct if not ready
         return isKnownWordSymSpell(word)
     }
 
