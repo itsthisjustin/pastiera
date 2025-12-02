@@ -158,6 +158,28 @@ android {
     }
 }
 
+// Task to copy release APK to releases directory for archiving
+tasks.register<Copy>("archiveReleaseApk") {
+    from("$buildDir/outputs/apk/release") {
+        include("*.apk")
+    }
+    into("$rootDir/releases")
+
+    doLast {
+        val releasesDir = file("$rootDir/releases")
+        if (releasesDir.exists()) {
+            println("Release APK archived to: ${releasesDir.absolutePath}")
+        }
+    }
+}
+
+// Automatically archive after assembleRelease
+afterEvaluate {
+    tasks.named("assembleRelease") {
+        finalizedBy("archiveReleaseApk")
+    }
+}
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)
