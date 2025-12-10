@@ -7,11 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,32 +33,25 @@ class TrackpadDebugActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Make this a proper overlay window
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        )
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-            android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        )
-
         enableEdgeToEdge()
         setContent {
-            TrackpadDebugScreen(
-                events = events,
-                onBackPressed = { finish() }
-            )
+            PastieraTheme {
+                TrackpadDebugScreen(
+                    events = events,
+                    onBackPressed = { finish() }
+                )
+            }
         }
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        android.util.Log.d("TrackpadDebug", "onGenericMotionEvent: action=${event.actionMasked} source=${event.source}")
         logMotionEvent("onGenericMotionEvent", event)
         return super.onGenericMotionEvent(event)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        android.util.Log.d("TrackpadDebug", "onTouchEvent: action=${event.actionMasked}")
         logMotionEvent("onTouchEvent", event)
         return super.onTouchEvent(event)
     }
@@ -157,47 +149,6 @@ fun TrackpadDebugScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f))
-            .clickable { onBackPressed() }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val pointerEvent = event.changes.firstOrNull()
-
-                        if (pointerEvent != null) {
-                            val eventType = when (event.type) {
-                                PointerEventType.Press -> "Press"
-                                PointerEventType.Release -> "Release"
-                                PointerEventType.Move -> "Move"
-                                PointerEventType.Enter -> "Enter"
-                                PointerEventType.Exit -> "Exit"
-                                PointerEventType.Scroll -> "Scroll"
-                                else -> "Unknown(${event.type})"
-                            }
-
-                            val logLines = mutableListOf<String>()
-                            logLines.add("[$eventType]")
-                            logLines.add("  Position: X=${"%.2f".format(pointerEvent.position.x)} Y=${"%.2f".format(pointerEvent.position.y)}")
-                            logLines.add("  Pressed: ${pointerEvent.pressed}")
-                            logLines.add("  Pressure: ${"%.3f".format(pointerEvent.pressure)}")
-                            logLines.add("  Time: ${pointerEvent.uptimeMillis}")
-
-                            if (event.type == PointerEventType.Scroll) {
-                                logLines.add("  Scroll delta: ${event.changes.first().scrollDelta}")
-                            }
-
-                            logLines.add("") // Empty line
-
-                            events.addAll(logLines)
-
-                            // Keep only last 500 lines
-                            while (events.size > 500) {
-                                events.removeAt(0)
-                            }
-                        }
-                    }
-                }
-            }
     ) {
         Column(
             modifier = Modifier
@@ -206,58 +157,111 @@ fun TrackpadDebugScreen(
         ) {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Trackpad Debug - Tap to Close",
-                    color = androidx.compose.ui.graphics.Color.Green,
-                    style = MaterialTheme.typography.titleLarge
+                    text = "Trackpad Debug",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = androidx.compose.ui.graphics.Color.Green
                 )
-                IconButton(onClick = { events.clear() }) {
-                    Icon(
-                        imageVector = Icons.Filled.Delete,
-                        contentDescription = "Clear",
-                        tint = androidx.compose.ui.graphics.Color.White
-                    )
+                Row {
+                    IconButton(onClick = { events.clear() }) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = "Clear",
+                            tint = androidx.compose.ui.graphics.Color.Green
+                        )
+                    }
+                    IconButton(onClick = onBackPressed) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Close",
+                            tint = androidx.compose.ui.graphics.Color.Green
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
+            // Event counter
             Text(
                 text = "Events captured: ${events.size}",
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyMedium
+                modifier = Modifier.padding(bottom = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = androidx.compose.ui.graphics.Color.Green
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Events list
             if (events.isEmpty()) {
                 Text(
                     text = "Waiting for trackpad events...\nSwipe on the trackpad to see events here.",
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = androidx.compose.ui.graphics.Color.Green
                 )
             } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(events) { event ->
                         Text(
                             text = event,
-                            color = androidx.compose.ui.graphics.Color.Green,
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(vertical = 1.dp)
+                            color = androidx.compose.ui.graphics.Color.Green,
+                            modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
                 }
             }
         }
+
+        // Transparent overlay to capture all pointer/touch events
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointerEvent = event.changes.firstOrNull()
+
+                            if (pointerEvent != null) {
+                                val eventType = when (event.type) {
+                                    PointerEventType.Press -> "Press"
+                                    PointerEventType.Release -> "Release"
+                                    PointerEventType.Move -> "Move"
+                                    PointerEventType.Enter -> "Enter"
+                                    PointerEventType.Exit -> "Exit"
+                                    PointerEventType.Scroll -> "Scroll"
+                                    else -> "Unknown(${event.type})"
+                                }
+
+                                val logLines = mutableListOf<String>()
+                                logLines.add("[$eventType]")
+                                logLines.add("  Position: X=${"%.2f".format(pointerEvent.position.x)} Y=${"%.2f".format(pointerEvent.position.y)}")
+                                logLines.add("  Pressed: ${pointerEvent.pressed}")
+                                logLines.add("  Pressure: ${"%.3f".format(pointerEvent.pressure)}")
+                                logLines.add("  Time: ${pointerEvent.uptimeMillis}")
+
+                                if (event.type == PointerEventType.Scroll) {
+                                    logLines.add("  Scroll delta: ${event.changes.first().scrollDelta}")
+                                }
+
+                                logLines.add("") // Empty line
+
+                                events.addAll(logLines)
+
+                                // Keep only last 500 lines
+                                while (events.size > 500) {
+                                    events.removeAt(0)
+                                }
+                            }
+                        }
+                    }
+                }
+        )
     }
 }

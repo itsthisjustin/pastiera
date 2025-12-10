@@ -14,6 +14,9 @@
     <!-- Permesso per l'accesso a Internet (richiesto per il controllo aggiornamenti) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Permesso per mostrare finestre overlay (per debug trackpad) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Query per vedere tutte le app installate che possono essere avviate -->
     <queries>
         <intent>
@@ -88,10 +91,8 @@
             android:exported="false"
             android:label="Trackpad Debug"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:launchMode="singleInstance"
             android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:showWhenLocked="true" />
+            android:launchMode="singleInstance" />
 
         <!-- Servizio di immissione per tastiera fisica -->
         <service
@@ -106,7 +107,12 @@
                 android:name="android.view.im"
                 android:resource="@xml/method" />
         </service>
-        
+
+        <!-- Servizio per overlay debug trackpad -->
+        <service
+            android:name=".TrackpadDebugOverlayService"
+            android:exported="false" />
+
         <!-- Attività helper per il riconoscimento vocale -->
         <activity
             android:name=".inputmethod.SpeechRecognitionActivity"
