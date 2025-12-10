@@ -514,4 +514,7 @@
     <string name="clipboard_pin">Pin</string>
     <string name="clipboard_unpin">Unpin</string>
     <string name="clipboard_delete">Delete</string>
+
+    <!-- Trackpad Debug Accessibility Service -->
+    <string name="trackpad_debug_service_description">Displays trackpad events in a small overlay for debugging purposes</string>
 </resources>

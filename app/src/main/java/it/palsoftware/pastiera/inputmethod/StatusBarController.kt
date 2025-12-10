@@ -284,9 +284,6 @@ class StatusBarController(
             variationsWrapper = variationBarView?.ensureView()
             val ledStrip = ledStatusView.ensureView()
 
-            // Launch trackpad debug activity
-            launchTrackpadDebug()
-
             statusBarLayout?.apply {
                 // Full-width suggestions bar above the rest
                 fullSuggestionsBar = FullSuggestionsBar(context)
