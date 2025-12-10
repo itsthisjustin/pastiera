@@ -1245,9 +1245,9 @@ class StatusBarController(
         val variationsWrapperView = if (!forceMinimalUi) variationsWrapper else null
         val experimentalEnabled = SettingsManager.isExperimentalSuggestionsEnabled(context)
         val suggestionsEnabledSetting = SettingsManager.getSuggestionsEnabled(context)
-        // Show full suggestions bar in CANDIDATES_ONLY mode or when not in minimal UI mode
-        val showFullBar = (mode == Mode.CANDIDATES_ONLY || !forceMinimalUi) &&
-            experimentalEnabled &&
+        // Show full suggestions bar when experimental suggestions are enabled
+        // (suggestions bar is shown regardless of forceMinimalUi since it's compact and useful)
+        val showFullBar = experimentalEnabled &&
             suggestionsEnabledSetting &&
             !snapshot.shouldDisableSuggestions &&
             snapshot.symPage == 0 &&

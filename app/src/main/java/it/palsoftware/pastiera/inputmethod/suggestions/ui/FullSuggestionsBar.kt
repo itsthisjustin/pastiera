@@ -164,13 +164,23 @@ class FullSuggestionsBar(private val context: Context) {
             return
         }
 
+        val slots = buildSlots(suggestions)
+
+        // Hide frame entirely if no actual suggestions
+        if (slots.all { it == null }) {
+            frame.visibility = View.GONE
+            bar.visibility = View.GONE
+            languageButton?.visibility = View.GONE
+            lastSlots = slots
+            return
+        }
+
         frame.visibility = View.VISIBLE
         // Show or hide language button based on showLanguageButton flag
         languageButton?.visibility = if (showLanguageButton) View.VISIBLE else View.GONE
         // Update language button text in case subtype changed externally
         languageButton?.text = getCurrentLanguageCode()
 
-        val slots = buildSlots(suggestions)
         if (slots == lastSlots && bar.childCount > 0) {
             bar.visibility = View.VISIBLE
             return
@@ -230,6 +240,12 @@ class FullSuggestionsBar(private val context: Context) {
             marginEnd = dpToPx(3f)
         }
 
+        val hasSuggestions = slots.any { it != null }
+
+        // Make container and frame backgrounds transparent when no suggestions
+        bar.setBackgroundColor(Color.TRANSPARENT)
+        frameContainer?.setBackgroundColor(if (hasSuggestions) Color.TRANSPARENT else Color.TRANSPARENT)
+
         val slotOrder = listOf(slots[0], slots[1], slots[2]) // left, center, right
         for (suggestion in slotOrder) {
             val button = TextView(context).apply {
@@ -246,7 +262,7 @@ class FullSuggestionsBar(private val context: Context) {
                 background = GradientDrawable().apply {
                     setColor(Color.rgb(17, 17, 17))
                     cornerRadius = dpToPx(6f).toFloat()
-                    alpha = if (suggestion == null) 90 else 255
+                    alpha = if (hasSuggestions) 0 else 255
                 }
                 layoutParams = weightLayoutParams
                 isClickable = suggestion != null
