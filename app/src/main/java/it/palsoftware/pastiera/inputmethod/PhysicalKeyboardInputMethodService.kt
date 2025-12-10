@@ -875,6 +875,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             } else if (key == AdditionalSubtypeUtils.PREF_CUSTOM_INPUT_STYLES) {
                 Log.d(TAG, "Custom input styles changed, re-registering subtypes...")
                 registerAdditionalSubtypes()
+            } else if (key == "trackpad_gestures_enabled") {
+                Log.d(TAG, "Trackpad gestures setting changed, restarting detection...")
+                stopTrackpadGestureDetection()
+                startTrackpadGestureDetection()
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
@@ -2242,6 +2246,12 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     // ========== Trackpad Gesture Detection ==========
 
     private fun startTrackpadGestureDetection() {
+        // Check if trackpad gestures are enabled in settings
+        if (!SettingsManager.getTrackpadGesturesEnabled(this)) {
+            Log.d(TAG, "Trackpad gestures disabled in settings")
+            return
+        }
+
         if (!Shizuku.pingBinder()) {
             Log.w(TAG, "Shizuku not available, trackpad gesture detection disabled")
             return
