@@ -335,8 +335,9 @@ class SuggestionEngine(
         val completions = repository.lookupByPrefixMerged(normalizedWord, maxSize = 200)
             .filter {
                 val norm = normalizeCached(it.word)
-                val meetsFrequency = repository.effectiveFrequency(it) >= minFrequencyForPrefixSuggestion
+                val meetsFrequency = it.source == SuggestionSource.USER || repository.effectiveFrequency(it) >= minFrequencyForPrefixSuggestion
                 // Only show words that are longer (actual completions) and meet frequency threshold
+                // Exception: USER dictionary words are always included regardless of frequency
                 norm.startsWith(normalizedWord) && it.word.length > currentWord.length && meetsFrequency
             }
 
@@ -373,16 +374,23 @@ class SuggestionEngine(
         val seen = HashSet<String>(limit * 3)
         val top = ArrayList<SuggestionResult>(limit)
 
-        // Comparator that ALWAYS prioritizes prefix matches over edit-distance suggestions
+        // Comparator with three-tier priority: USER words > prefix completions > edit-distance
         val comparator = Comparator<SuggestionResult> { a, b ->
+            val aIsUser = a.source == SuggestionSource.USER
+            val bIsUser = b.source == SuggestionSource.USER
+
+            // User dictionary words ALWAYS rank highest
+            if (aIsUser && !bIsUser) return@Comparator -1
+            if (!aIsUser && bIsUser) return@Comparator 1
+
             val aIsPrefix = a.candidate.lowercase().startsWith(normalizedWord) && a.candidate.length > currentWord.length
             val bIsPrefix = b.candidate.lowercase().startsWith(normalizedWord) && b.candidate.length > currentWord.length
 
-            // Prefix completions ALWAYS rank higher than non-prefix
+            // Prefix completions rank higher than edit-distance suggestions
             if (aIsPrefix && !bIsPrefix) return@Comparator -1
             if (!aIsPrefix && bIsPrefix) return@Comparator 1
 
-            // Both are prefix or both are not prefix - use normal ranking
+            // Same tier - use normal ranking (distance, score, length)
             val d = a.distance.compareTo(b.distance)
             if (d != 0) return@Comparator d
             val scoreCmp = b.score.compareTo(a.score)
@@ -402,6 +410,7 @@ class SuggestionEngine(
             if (inputLen <= 2 && distance > 1) return
 
             // Filter out rare words for prefix suggestions (completions)
+            // Exception: Don't filter when overrideCandidates is provided (e.g., user dictionary words)
             val isPrefix = term.startsWith(normalizedWord) && term.length > normalizedWord.length
             val minFrequency = if (inputLen <= 2) {
                 150 // Threshold for short inputs
@@ -412,7 +421,7 @@ class SuggestionEngine(
             } else {
                 60 // Threshold for longer inputs
             }
-            if (isPrefix && frequency < minFrequency) {
+            if (isPrefix && frequency < minFrequency && overrideCandidates == null) {
                 return // Skip rare prefix completions
             }
 
@@ -445,8 +454,9 @@ class SuggestionEngine(
                 val effectiveFreq = repository.effectiveFrequency(entry)
 
                 // Filter prefix completions by their ACTUAL frequency, not SymSpell boosted frequency
+                // Exception: Never filter user dictionary words
                 val isActualPrefix = normCandidate.startsWith(normalizedWord) && entry.word.length > currentWord.length
-                if (isActualPrefix) {
+                if (isActualPrefix && entry.source != SuggestionSource.USER) {
                     val minFreqForCandidate = if (inputLen <= 2) {
                         150
                     } else if (inputLen == 3) {
@@ -473,9 +483,10 @@ class SuggestionEngine(
 
                 // Filter out capitalized words for prefix completions when input is lowercase
                 // (likely proper nouns like "Hardy" when typing "hard")
+                // Exception: Never filter user dictionary words
                 val inputIsLowercase = currentWord.firstOrNull()?.isLowerCase() == true
                 val candidateIsCapitalized = entry.word.firstOrNull()?.isUpperCase() == true
-                if (isPrefix && inputIsLowercase && candidateIsCapitalized) {
+                if (isPrefix && inputIsLowercase && candidateIsCapitalized && entry.source != SuggestionSource.USER) {
                     return@forEach // Skip capitalized prefix completions when user typed lowercase
                 }
 
@@ -603,7 +614,7 @@ class SuggestionEngine(
         // Consider completions first to surface them even if SymSpell returns other close words
         for (entry in completions) {
             val norm = normalizeCached(entry.word)
-            consider(norm, 0, entry.frequency, isForcedPrefix = true)
+            consider(norm, 0, entry.frequency, isForcedPrefix = true, overrideCandidates = listOf(entry))
         }
 
         // Ensure short elisions like "l'" are considered even if absent from the dictionary
