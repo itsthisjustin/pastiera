@@ -123,6 +123,28 @@ class TrackpadCursorOverlayService : Service() {
     }
 
     /**
+     * Set cursor position using screen coordinates directly.
+     * @param x Screen X position in pixels
+     * @param y Screen Y position in pixels
+     */
+    fun setCursorScreenPosition(x: Int, y: Int) {
+        Handler(Looper.getMainLooper()).post {
+            cursorX = x.toFloat()
+            cursorY = y.toFloat()
+
+            val cursorSizePx = (CURSOR_SIZE_DP * resources.displayMetrics.density).toInt()
+
+            // Update window position
+            cursorView?.let { view ->
+                val params = view.layoutParams as? WindowManager.LayoutParams ?: return@post
+                params.x = x - cursorSizePx / 2
+                params.y = y - cursorSizePx / 2
+                windowManager?.updateViewLayout(view, params)
+            }
+        }
+    }
+
+    /**
      * Set absolute cursor position (from raw trackpad coordinates).
      * @param x Absolute X position (0-1440 trackpad range)
      * @param y Absolute Y position (0-900 trackpad range)

@@ -34,13 +34,25 @@ class TrackpadCursorController(
     private var cursorService: TrackpadCursorOverlayService? = null
     private var isBound = false
 
-    private var currentX = 0
-    private var currentY = 0
+    // Trackpad position (raw input)
+    private var trackpadX = 0
+    private var trackpadY = 0
+    private var lastTrackpadX = 0
+    private var lastTrackpadY = 0
+
+    // Screen cursor position (what we're controlling)
+    private var cursorScreenX = 0f
+    private var cursorScreenY = 0f
     private var lastUpdateTime = 0L
     private val updateThrottleMs = 16L // ~60fps
 
+    // Sensitivity multiplier for trackpad movement
+    private val sensitivity = 2.0f
+
     private var isTouching = false
     private var touchDownTime = 0L
+    private var needsNewBaseline = true
+    private var skipNextUpdate = false
 
     companion object {
         private const val TAG = "TrackpadCursor"
@@ -82,6 +94,13 @@ class TrackpadCursorController(
         val serviceIntent = Intent(context, TrackpadCursorOverlayService::class.java)
         context.startService(serviceIntent)
         context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+
+        // Initialize cursor to center of screen
+        val displayMetrics = context.resources.displayMetrics
+        cursorScreenX = displayMetrics.widthPixels / 2f
+        cursorScreenY = displayMetrics.heightPixels / 2f
+        needsNewBaseline = true
+        skipNextUpdate = false
 
         // Start reading trackpad events
         geteventJob = scope.launch(Dispatchers.IO) {
@@ -195,8 +214,9 @@ class TrackpadCursorController(
                 if (parts.size >= 3) {
                     val hexValue = parts.last()
                     val newX = hexValue.toIntOrNull(16)
-                    if (newX != null && newX != currentX) {
-                        currentX = newX
+                    if (newX != null) {
+                        lastTrackpadX = trackpadX
+                        trackpadX = newX
                         updated = true
                     }
                 }
@@ -207,8 +227,9 @@ class TrackpadCursorController(
                 if (parts.size >= 3) {
                     val hexValue = parts.last()
                     val newY = hexValue.toIntOrNull(16)
-                    if (newY != null && newY != currentY) {
-                        currentY = newY
+                    if (newY != null) {
+                        lastTrackpadY = trackpadY
+                        trackpadY = newY
                         updated = true
                     }
                 }
@@ -221,6 +242,7 @@ class TrackpadCursorController(
                     if (value == "DOWN") {
                         isTouching = true
                         touchDownTime = System.currentTimeMillis()
+                        needsNewBaseline = true
                         Log.d(TAG, "Touch down detected")
                     } else if (value == "UP" && isTouching) {
                         val touchDuration = System.currentTimeMillis() - touchDownTime
@@ -243,6 +265,7 @@ class TrackpadCursorController(
                         if (trackingId != -1L && !isTouching) {
                             isTouching = true
                             touchDownTime = System.currentTimeMillis()
+                            needsNewBaseline = true
                             Log.d(TAG, "Touch down detected (tracking ID: $trackingId)")
                         } else if (trackingId == -1L && isTouching) {
                             val touchDuration = System.currentTimeMillis() - touchDownTime
@@ -273,23 +296,52 @@ class TrackpadCursorController(
             Log.w(TAG, "Cannot update cursor - service not bound yet")
             return
         }
-        cursorService?.setCursorAbsolutePosition(currentX, currentY, trackpadMaxX, trackpadMaxY)
-        Log.d(TAG, "Cursor updated to trackpad position ($currentX, $currentY)")
+
+        // Skip first position update of each touch to establish baseline
+        if (needsNewBaseline) {
+            needsNewBaseline = false
+            skipNextUpdate = true
+            lastTrackpadX = trackpadX
+            lastTrackpadY = trackpadY
+            Log.d(TAG, "Baseline established at trackpad position ($trackpadX, $trackpadY)")
+            return
+        }
+
+        // Skip the first update after baseline to avoid stale position data
+        if (skipNextUpdate) {
+            skipNextUpdate = false
+            lastTrackpadX = trackpadX
+            lastTrackpadY = trackpadY
+            Log.d(TAG, "Skipped first update, reset baseline to ($trackpadX, $trackpadY)")
+            return
+        }
+
+        // Calculate movement delta
+        val deltaX = trackpadX - lastTrackpadX
+        val deltaY = trackpadY - lastTrackpadY
+
+        // Apply delta with sensitivity to cursor position
+        cursorScreenX += deltaX * sensitivity
+        cursorScreenY += deltaY * sensitivity
+
+        // Clamp cursor to screen bounds
+        val displayMetrics = context.resources.displayMetrics
+        cursorScreenX = cursorScreenX.coerceIn(0f, displayMetrics.widthPixels.toFloat())
+        cursorScreenY = cursorScreenY.coerceIn(0f, displayMetrics.heightPixels.toFloat())
+
+        // Update cursor overlay position
+        cursorService?.setCursorScreenPosition(cursorScreenX.toInt(), cursorScreenY.toInt())
+        Log.d(TAG, "Cursor moved to screen position ($cursorScreenX, $cursorScreenY), delta: ($deltaX, $deltaY)")
+
+        // Update last position for next delta calculation
+        lastTrackpadX = trackpadX
+        lastTrackpadY = trackpadY
     }
 
     private fun performTap() {
         scope.launch(Dispatchers.IO) {
             try {
-                // Get screen dimensions
-                val displayMetrics = context.resources.displayMetrics
-                val screenWidth = displayMetrics.widthPixels
-                val screenHeight = displayMetrics.heightPixels
-
-                // Convert trackpad coordinates to screen coordinates
-                val screenX = (currentX.toFloat() / trackpadMaxX) * screenWidth
-                val screenY = (currentY.toFloat() / trackpadMaxY) * screenHeight
-
-                Log.d(TAG, "Performing tap at screen position ($screenX, $screenY)")
+                Log.d(TAG, "Performing tap at screen position ($cursorScreenX, $cursorScreenY)")
 
                 val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
                     "newProcess",
@@ -301,7 +353,7 @@ class TrackpadCursorController(
 
                 val process = newProcessMethod.invoke(
                     null,
-                    arrayOf("input", "tap", screenX.toInt().toString(), screenY.toInt().toString()),
+                    arrayOf("input", "tap", cursorScreenX.toInt().toString(), cursorScreenY.toInt().toString()),
                     null,
                     null
                 ) as Process
@@ -320,14 +372,7 @@ class TrackpadCursorController(
     fun performLeftClick() {
         scope.launch(Dispatchers.IO) {
             try {
-                val displayMetrics = context.resources.displayMetrics
-                val screenWidth = displayMetrics.widthPixels
-                val screenHeight = displayMetrics.heightPixels
-
-                val screenX = (currentX.toFloat() / trackpadMaxX) * screenWidth
-                val screenY = (currentY.toFloat() / trackpadMaxY) * screenHeight
-
-                Log.d(TAG, "Performing left click at ($screenX, $screenY)")
+                Log.d(TAG, "Performing left click at ($cursorScreenX, $cursorScreenY)")
 
                 val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
                     "newProcess",
@@ -339,7 +384,7 @@ class TrackpadCursorController(
 
                 val process = newProcessMethod.invoke(
                     null,
-                    arrayOf("input", "tap", screenX.toInt().toString(), screenY.toInt().toString()),
+                    arrayOf("input", "tap", cursorScreenX.toInt().toString(), cursorScreenY.toInt().toString()),
                     null,
                     null
                 ) as Process
@@ -358,14 +403,7 @@ class TrackpadCursorController(
     fun performRightClick() {
         scope.launch(Dispatchers.IO) {
             try {
-                val displayMetrics = context.resources.displayMetrics
-                val screenWidth = displayMetrics.widthPixels
-                val screenHeight = displayMetrics.heightPixels
-
-                val screenX = (currentX.toFloat() / trackpadMaxX) * screenWidth
-                val screenY = (currentY.toFloat() / trackpadMaxY) * screenHeight
-
-                Log.d(TAG, "Performing right click (long press) at ($screenX, $screenY)")
+                Log.d(TAG, "Performing right click (long press) at ($cursorScreenX, $cursorScreenY)")
 
                 val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
                     "newProcess",
@@ -380,10 +418,10 @@ class TrackpadCursorController(
                     null,
                     arrayOf(
                         "input", "swipe",
-                        screenX.toInt().toString(),
-                        screenY.toInt().toString(),
-                        screenX.toInt().toString(),
-                        screenY.toInt().toString(),
+                        cursorScreenX.toInt().toString(),
+                        cursorScreenY.toInt().toString(),
+                        cursorScreenX.toInt().toString(),
+                        cursorScreenY.toInt().toString(),
                         "1000"  // 1 second long press
                     ),
                     null,
