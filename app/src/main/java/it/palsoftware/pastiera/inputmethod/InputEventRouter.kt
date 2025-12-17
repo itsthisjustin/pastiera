@@ -133,9 +133,10 @@ class InputEventRouter(
             )
         }
 
-        // Gestisci Power Shortcuts (SYM premuto + tasto alfabetico)
+        // Gestisci Power Shortcuts (SYM premuto + tasto alfabetico o Shift)
         if (!ctrlLatchActive && powerShortcutsEnabled) {
-            if (callbacks.isAlphabeticKey(keyCode)) {
+            val isShiftKey = keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT
+            if (callbacks.isAlphabeticKey(keyCode) || isShiftKey) {
                 if (callbacks.handlePowerShortcut(keyCode)) {
                     return true
                 }
@@ -250,7 +251,8 @@ class InputEventRouter(
         val startSpeechRecognition: () -> Unit,
         val getMapping: (Int) -> LayoutMapping?,
         val handleMultiTapCommit: (Int, LayoutMapping, Boolean, InputConnection?, Boolean) -> Boolean,
-        val isLongPressSuppressed: (Int) -> Boolean
+        val isLongPressSuppressed: (Int) -> Boolean,
+        val toggleTrackpadCursorMode: () -> Unit
     )
 
     fun routeEditableFieldKeyDown(
@@ -339,7 +341,7 @@ class InputEventRouter(
                 controllers.modifierStateController.clearAltState(resetPressedState = true)
                 callbacks.updateStatusBar()
             }
-            
+
             controllers.symLayoutController.toggleSymPage()
             callbacks.updateStatusBar()
             return EditableFieldRoutingResult.Consume
@@ -384,7 +386,8 @@ class InputEventRouter(
                 altLatchActive = altLatchActive,
                 cursorUpdateDelayMs = params.cursorUpdateDelayMs,
                 updateStatusBar = callbacks.updateStatusBar,
-                callSuper = callbacks.callSuper
+                callSuper = callbacks.callSuper,
+                toggleTrackpadCursorMode = callbacks.toggleTrackpadCursorMode
             )
         ) {
             return EditableFieldRoutingResult.Consume
@@ -841,7 +844,8 @@ class InputEventRouter(
         altLatchActive: Boolean,
         cursorUpdateDelayMs: Long,
         updateStatusBar: () -> Unit,
-        callSuper: () -> Boolean
+        callSuper: () -> Boolean,
+        toggleTrackpadCursorMode: () -> Unit
     ): Boolean {
         val ic = inputConnection ?: return false
 
@@ -872,7 +876,8 @@ class InputEventRouter(
                     ic,
                     ctrlLatchActive = ctrlLatchActive,
                     altLatchActive = altLatchActive,
-                    updateStatusBar = updateStatusBar
+                    updateStatusBar = updateStatusBar,
+                    onTrackpadCursorToggle = toggleTrackpadCursorMode
                 )
             ) {
                 SymKeyResult.CONSUME -> true

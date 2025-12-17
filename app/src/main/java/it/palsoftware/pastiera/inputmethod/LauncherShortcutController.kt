@@ -33,6 +33,9 @@ class LauncherShortcutController(
     private var exitNavModeCallback: (() -> Unit)? = null
     private var enterNavModeCallback: (() -> Unit)? = null
 
+    // Callback for trackpad cursor mode toggle
+    private var toggleTrackpadCursorCallback: (() -> Unit)? = null
+
     /**
      * Verifica se il package corrente è un launcher.
      */
@@ -145,6 +148,13 @@ class LauncherShortcutController(
         exitNavModeCallback = exitNavMode
         enterNavModeCallback = enterNavMode
     }
+
+    /**
+     * Sets the callback for toggling trackpad cursor mode.
+     */
+    fun setTrackpadCursorCallback(callback: () -> Unit) {
+        toggleTrackpadCursorCallback = callback
+    }
     
     /**
      * Attiva o disattiva il Power Shortcut mode (SYM premuto).
@@ -235,13 +245,27 @@ class LauncherShortcutController(
      * Restituisce true se lo shortcut è stato gestito, false altrimenti.
      */
     fun handlePowerShortcut(keyCode: Int): Boolean {
+        Log.d(TAG, "handlePowerShortcut called with keyCode=$keyCode, isPowerShortcutModeActive=${isPowerShortcutModeActive()}")
+
         if (!isPowerShortcutModeActive()) {
             return false
         }
-        
+
+        // Special handling for SYM+Shift: toggle trackpad cursor mode
+        if (keyCode == android.view.KeyEvent.KEYCODE_SHIFT_LEFT || keyCode == android.view.KeyEvent.KEYCODE_SHIFT_RIGHT) {
+            val cursorEnabled = SettingsManager.getTrackpadCursorEnabled(context)
+            Log.d(TAG, "SYM+Shift detected, trackpad cursor enabled in settings: $cursorEnabled")
+            if (cursorEnabled) {
+                resetPowerShortcutMode()
+                toggleTrackpadCursorCallback?.invoke()
+                Log.d(TAG, "Trackpad cursor toggled via SYM+Shift")
+                return true
+            }
+        }
+
         // Reset del mode dopo l'uso
         resetPowerShortcutMode()
-        
+
         // Riutilizza la logica esistente - stessa funzione, stesse assegnazioni
         return handleLauncherShortcut(keyCode)
     }

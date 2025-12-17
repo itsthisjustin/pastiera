@@ -32,6 +32,7 @@ import kotlin.math.abs
 import it.palsoftware.pastiera.inputmethod.ui.ClipboardHistoryView
 import it.palsoftware.pastiera.inputmethod.ui.LedStatusView
 import it.palsoftware.pastiera.inputmethod.ui.VariationBarView
+import it.palsoftware.pastiera.inputmethod.ui.TrackpadCursorView
 import it.palsoftware.pastiera.inputmethod.suggestions.ui.FullSuggestionsBar
 import android.content.res.AssetManager
 import androidx.core.view.ViewCompat
@@ -186,6 +187,7 @@ class StatusBarController(
     private var emojiKeyboardHorizontalPaddingPx: Int = 0
     private var emojiKeyboardBottomPaddingPx: Int = 0
     private var clipboardHistoryView: ClipboardHistoryView? = null
+    private var trackpadCursorView: TrackpadCursorView? = null
     private var lastClipboardCountRendered: Int = -1
     private var emojiKeyButtons: MutableList<View> = mutableListOf()
     private var lastSymPageRendered: Int = 0
@@ -452,6 +454,24 @@ class StatusBarController(
             lastClipboardCountRendered = count
         }
         lastSymPageRendered = 3
+    }
+
+    /**
+     * Updates the trackpad cursor view inline in the keyboard container.
+     */
+    private fun updateTrackpadCursorView() {
+        val container = emojiKeyboardContainer ?: return
+        // Trackpad cursor page should be edge-to-edge; remove the SYM container side padding.
+        container.setPadding(0, 0, 0, emojiKeyboardBottomPaddingPx)
+
+        // Reuse the same view to avoid flicker caused by removeAllViews()/recreate on each status update.
+        val view = trackpadCursorView ?: TrackpadCursorView(context).also { trackpadCursorView = it }
+        if (view.parent !== container) {
+            container.removeAllViews()
+            emojiKeyButtons.clear()
+            container.addView(view)
+        }
+        lastSymPageRendered = 4
     }
 
     /**
@@ -1128,10 +1148,13 @@ class StatusBarController(
         }
 
         if (snapshot.symPage > 0) {
-            // Handle page 3 (clipboard) vs pages 1-2 (emoji/symbols)
+            // Handle page 3 (clipboard), page 4 (trackpad cursor), vs pages 1-2 (emoji/symbols)
             if (snapshot.symPage == 3) {
                 // Show clipboard history inline (similar to emoji grid)
                 updateClipboardView(inputConnection)
+            } else if (snapshot.symPage == 4) {
+                // Show trackpad cursor mode
+                updateTrackpadCursorView()
             } else if (symMappings != null) {
                 updateEmojiKeyboard(symMappings, snapshot.symPage, inputConnection)
             }

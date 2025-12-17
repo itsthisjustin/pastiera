@@ -52,6 +52,7 @@ object SettingsManager {
     private const val KEY_CLIPBOARD_RETENTION_TIME = "clipboard_retention_time" // How long to keep clipboard entries (in minutes)
     private const val KEY_TRACKPAD_GESTURES_ENABLED = "trackpad_gestures_enabled" // Whether trackpad gesture suggestions are enabled
     private const val KEY_TRACKPAD_SWIPE_THRESHOLD = "trackpad_swipe_threshold" // Threshold for swipe detection on trackpad
+    private const val KEY_TRACKPAD_CURSOR_ENABLED = "trackpad_cursor_enabled" // Whether trackpad cursor mode is enabled
 
     private const val VARIATIONS_FILE_NAME = "variations.json"
     
@@ -92,6 +93,7 @@ object SettingsManager {
     private const val DEFAULT_CLIPBOARD_RETENTION_TIME = 120L // 2 hours in minutes
     private const val DEFAULT_TRACKPAD_GESTURES_ENABLED = false
     private const val DEFAULT_TRACKPAD_SWIPE_THRESHOLD = 300f
+    private const val DEFAULT_TRACKPAD_CURSOR_ENABLED = false
     private const val MIN_TRACKPAD_SWIPE_THRESHOLD = 120f
     private const val MAX_TRACKPAD_SWIPE_THRESHOLD = 600f
 
@@ -1579,6 +1581,26 @@ object SettingsManager {
     fun getMinTrackpadSwipeThreshold(): Float = MIN_TRACKPAD_SWIPE_THRESHOLD
     fun getMaxTrackpadSwipeThreshold(): Float = MAX_TRACKPAD_SWIPE_THRESHOLD
     fun getDefaultTrackpadSwipeThreshold(): Float = DEFAULT_TRACKPAD_SWIPE_THRESHOLD
+
+    /**
+     * Returns whether trackpad cursor mode is enabled.
+     * @param context The context
+     * @return Whether trackpad cursor is enabled
+     */
+    fun getTrackpadCursorEnabled(context: Context): Boolean {
+        return getPreferences(context).getBoolean(KEY_TRACKPAD_CURSOR_ENABLED, DEFAULT_TRACKPAD_CURSOR_ENABLED)
+    }
+
+    /**
+     * Sets whether trackpad cursor mode is enabled.
+     * @param context The context
+     * @param enabled Whether to enable trackpad cursor
+     */
+    fun setTrackpadCursorEnabled(context: Context, enabled: Boolean) {
+        getPreferences(context).edit()
+            .putBoolean(KEY_TRACKPAD_CURSOR_ENABLED, enabled)
+            .commit()  // Use commit() instead of apply() to ensure synchronous write
+    }
 
     /**
      * Returns the File for variations.json in filesDir.

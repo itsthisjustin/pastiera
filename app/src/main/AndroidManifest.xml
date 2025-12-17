@@ -94,6 +94,18 @@
             android:excludeFromRecents="true"
             android:launchMode="singleInstance" />
 
+        <!-- Service for trackpad debug overlay -->
+        <service
+            android:name=".TrackpadDebugOverlayService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Service for trackpad cursor overlay -->
+        <service
+            android:name=".TrackpadCursorOverlayService"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- Servizio di immissione per tastiera fisica -->
         <service
             android:name=".inputmethod.PhysicalKeyboardInputMethodService"

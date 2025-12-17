@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
@@ -490,6 +491,88 @@ fun AdvancedSettingsScreen(
                             }
                         }
 
+                        // Trackpad Cursor Mode
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { navigateTo(AdvancedDestination.TrackpadCursor) }
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Mouse,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.trackpad_cursor_title),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.trackpad_cursor_description),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                // Shizuku Status Row
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 36.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = when (shizukuStatus) {
+                                            ShizukuStatus.Connected -> Icons.Filled.CheckCircle
+                                            ShizukuStatus.NotAuthorized -> Icons.Filled.Warning
+                                            ShizukuStatus.NotConnected -> Icons.Filled.Error
+                                        },
+                                        contentDescription = null,
+                                        tint = when (shizukuStatus) {
+                                            ShizukuStatus.Connected -> MaterialTheme.colorScheme.primary
+                                            ShizukuStatus.NotAuthorized -> MaterialTheme.colorScheme.tertiary
+                                            ShizukuStatus.NotConnected -> MaterialTheme.colorScheme.error
+                                        },
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = when (shizukuStatus) {
+                                            ShizukuStatus.Connected -> stringResource(R.string.trackpad_gestures_shizuku_connected)
+                                            ShizukuStatus.NotAuthorized -> stringResource(R.string.trackpad_gestures_shizuku_not_authorized)
+                                            ShizukuStatus.NotConnected -> stringResource(R.string.trackpad_gestures_shizuku_not_connected)
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = when (shizukuStatus) {
+                                            ShizukuStatus.Connected -> MaterialTheme.colorScheme.primary
+                                            ShizukuStatus.NotAuthorized -> MaterialTheme.colorScheme.tertiary
+                                            ShizukuStatus.NotConnected -> MaterialTheme.colorScheme.error
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
                         // Backup
                         Surface(
                             modifier = Modifier
@@ -809,6 +892,13 @@ fun AdvancedSettingsScreen(
                 )
             }
 
+            AdvancedDestination.TrackpadCursor -> {
+                TrackpadCursorSettingsScreen(
+                    modifier = modifier,
+                    onBack = { navigateBack() }
+                )
+            }
+
         }
     }
 }
@@ -818,6 +908,7 @@ private sealed class AdvancedDestination {
     object LauncherShortcuts : AdvancedDestination()
     object ImeTest : AdvancedDestination()
     object TrackpadGestures : AdvancedDestination()
+    object TrackpadCursor : AdvancedDestination()
 }
 
 private enum class AdvancedNavigationDirection {

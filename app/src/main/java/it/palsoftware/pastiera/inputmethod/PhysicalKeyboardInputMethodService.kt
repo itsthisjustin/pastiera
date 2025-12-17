@@ -44,6 +44,7 @@ import it.palsoftware.pastiera.data.variation.VariationRepository
 import it.palsoftware.pastiera.inputmethod.SpeechRecognitionActivity
 import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils
 import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadGestureDetector
+import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadCursorController
 import java.util.Locale
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.InputMethodSubtype
@@ -192,6 +193,18 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
     // Trackpad gesture detection
     private val trackpadScope = CoroutineScope(Dispatchers.IO)
     private lateinit var trackpadGestureDetector: TrackpadGestureDetector
+    private lateinit var trackpadCursorController: TrackpadCursorController
+
+    // Shizuku listener to handle reconnection
+    private val shizukuBinderReceivedListener = Shizuku.OnBinderReceivedListener {
+        Log.d(TAG, "Shizuku binder received - reconnecting trackpad features")
+        restartTrackpadFeatures()
+    }
+
+    private val shizukuBinderDeadListener = Shizuku.OnBinderDeadListener {
+        Log.d(TAG, "Shizuku binder dead - stopping trackpad features")
+        stopTrackpadFeatures()
+    }
 
     private val multiTapHandler = Handler(Looper.getMainLooper())
     private val multiTapController = MultiTapController(
@@ -322,6 +335,29 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
      */
     private fun stopSpeechRecognition() {
         speechRecognitionManager?.stopRecognition()
+    }
+
+    /**
+     * Toggles trackpad cursor mode on/off.
+     */
+    private fun toggleTrackpadCursorMode() {
+        if (!::trackpadCursorController.isInitialized) {
+            return
+        }
+
+        val cursorEnabled = SettingsManager.getTrackpadCursorEnabled(this)
+        if (!cursorEnabled) {
+            Log.d(TRACKPAD_DEBUG_TAG, "Trackpad cursor mode is disabled in settings")
+            return
+        }
+
+        if (trackpadCursorController.isRunning()) {
+            Log.d(TRACKPAD_DEBUG_TAG, "Stopping trackpad cursor mode (SYM+ALT)")
+            trackpadCursorController.stop()
+        } else {
+            Log.d(TRACKPAD_DEBUG_TAG, "Starting trackpad cursor mode (SYM+ALT)")
+            trackpadCursorController.start()
+        }
     }
 
     private fun getSuggestionSettings(): SuggestionSettings {
@@ -853,6 +889,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             exitNavMode = { navModeController.exitNavMode() },
             enterNavMode = { navModeController.enterNavMode() }
         )
+        // Configure callback for trackpad cursor mode
+        launcherShortcutController.setTrackpadCursorCallback {
+            toggleTrackpadCursorMode()
+        }
 
         // Initialize keyboard layout
         loadKeyboardLayout()
@@ -1093,6 +1133,21 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         Log.d(TRACKPAD_DEBUG_TAG, "onCreate: Calling initial trackpadGestureDetector.start()...")
         trackpadGestureDetector.start()
         Log.d(TRACKPAD_DEBUG_TAG, "onCreate: Initial start() call completed")
+
+        // Initialize trackpad cursor controller
+        trackpadCursorController = TrackpadCursorController(
+            context = this,
+            scope = trackpadScope
+        )
+
+        // Register Shizuku listeners for automatic reconnection
+        try {
+            Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
+            Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
+            Log.d(TAG, "Shizuku listeners registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register Shizuku listeners", e)
+        }
     }
 
     private fun buildTrackpadGestureDetector(): TrackpadGestureDetector {
@@ -1114,7 +1169,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         prefsListener?.let {
             prefs.unregisterOnSharedPreferenceChangeListener(it)
         }
-        
+
         // Cleanup SpeechRecognitionManager
         speechRecognitionManager?.destroy()
         speechRecognitionManager = null
@@ -1160,9 +1215,65 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         multiTapController.cancelAll()
         updateNavModeStatusIcon(false)
 
+        // Unregister Shizuku listeners
+        try {
+            Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
+            Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
+            Log.d(TAG, "Shizuku listeners unregistered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to unregister Shizuku listeners", e)
+        }
+
         // Stop trackpad gesture detection
         trackpadGestureDetector.stop()
+
+        // Stop trackpad cursor controller if running
+        if (::trackpadCursorController.isInitialized && trackpadCursorController.isRunning()) {
+            trackpadCursorController.stop()
+        }
+
         trackpadScope.cancel()
+    }
+
+    /**
+     * Restart trackpad features when Shizuku reconnects.
+     */
+    private fun restartTrackpadFeatures() {
+        Handler(Looper.getMainLooper()).post {
+            // Restart trackpad gesture detector if gestures are enabled
+            if (SettingsManager.getTrackpadGesturesEnabled(this)) {
+                if (::trackpadGestureDetector.isInitialized) {
+                    trackpadGestureDetector.stop()
+                    trackpadGestureDetector = buildTrackpadGestureDetector()
+                    trackpadGestureDetector.start()
+                    Log.d(TRACKPAD_DEBUG_TAG, "Trackpad gestures restarted after Shizuku reconnection")
+                }
+            }
+
+            // Restart trackpad cursor if currently active (symPage == 4)
+            if (::trackpadCursorController.isInitialized && symPage == 4) {
+                trackpadCursorController.stop()
+                trackpadCursorController.start()
+                Log.d(TRACKPAD_DEBUG_TAG, "Trackpad cursor restarted after Shizuku reconnection")
+            }
+        }
+    }
+
+    /**
+     * Stop trackpad features when Shizuku dies.
+     */
+    private fun stopTrackpadFeatures() {
+        Handler(Looper.getMainLooper()).post {
+            if (::trackpadGestureDetector.isInitialized) {
+                trackpadGestureDetector.stop()
+                Log.d(TRACKPAD_DEBUG_TAG, "Trackpad gestures stopped due to Shizuku disconnection")
+            }
+
+            if (::trackpadCursorController.isInitialized && trackpadCursorController.isRunning()) {
+                trackpadCursorController.stop()
+                Log.d(TRACKPAD_DEBUG_TAG, "Trackpad cursor stopped due to Shizuku disconnection")
+            }
+        }
     }
 
     override fun onCreateInputView(): View? = keyboardVisibilityController.onCreateInputView()
@@ -1286,6 +1397,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         // Passa l'inputConnection per rendere i pulsanti clickabili
         val inputConnection = currentInputConnection
         candidatesBarController.updateStatusBars(snapshot, emojiMapText, inputConnection, symMappings)
+
+        // Trackpad cursor is now controlled via SYM+ALT shortcut, no longer tied to sym pages
     }
     
     /**
@@ -1423,10 +1536,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             val gesturesEnabled = SettingsManager.getTrackpadGesturesEnabled(this)
             if (gesturesEnabled && !trackpadGestureDetector.isRunning()) {
                 val shizukuRunning = try { Shizuku.pingBinder() } catch (e: Exception) { false }
-                val shizukuAuthorized = try { 
-                    Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED 
+                val shizukuAuthorized = try {
+                    Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                 } catch (e: Exception) { false }
-                
+
                 if (shizukuRunning && shizukuAuthorized) {
                     Log.d(TRACKPAD_DEBUG_TAG, "onStartInputView: Gestures enabled and Shizuku ready, starting detector...")
                     trackpadGestureDetector.start()
@@ -1445,6 +1558,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
         inputContextState = InputContextState.EMPTY
         multiTapController.cancelAll()
         resetModifierStates(preserveNavMode = true)
+
         // Se nav mode era attivo prima di entrare nel campo di testo, riattivalo ora
         if (navModeWasActiveBeforeEditableField) {
             navModeController.enterNavMode()
@@ -1972,6 +2086,27 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
             }
         }
 
+        // Handle Shift and Alt clicks when trackpad cursor mode is active
+        // But skip if power shortcuts mode is active OR SYM overlay is active (for SYM+Shift toggle)
+        val powerShortcutModeActive = launcherShortcutController.isPowerShortcutModeActive()
+        val symOverlayActive = symLayoutController.isSymActive()
+        if (::trackpadCursorController.isInitialized && trackpadCursorController.isRunning() && !powerShortcutModeActive && !symOverlayActive) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
+                    // Shift = right click (long press)
+                    trackpadCursorController.performRightClick()
+                    Log.d(TRACKPAD_DEBUG_TAG, "Right click triggered via Shift in trackpad cursor mode")
+                    return true
+                }
+                KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> {
+                    // Alt = left click
+                    trackpadCursorController.performLeftClick()
+                    Log.d(TRACKPAD_DEBUG_TAG, "Left click triggered via Alt in trackpad cursor mode")
+                    return true
+                }
+            }
+        }
+
         val navModeBefore = navModeController.isNavModeActive()
 
         val isModifierKey = keyCode == KeyEvent.KEYCODE_SHIFT_LEFT ||
@@ -2166,7 +2301,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService() {
                 },
                 isLongPressSuppressed = { code ->
                     multiTapController.isLongPressSuppressed(code)
-                }
+                },
+                toggleTrackpadCursorMode = { toggleTrackpadCursorMode() }
             )
         )
 

@@ -558,6 +558,13 @@
     <string name="trackpad_tutorial_next">Next</string>
     <string name="trackpad_tutorial_previous">Previous</string>
 
+    <!-- Trackpad Cursor Mode -->
+    <string name="trackpad_cursor_title">Trackpad Cursor Mode</string>
+    <string name="trackpad_cursor_description">Use trackpad as a mouse cursor on the screen</string>
+    <string name="trackpad_cursor_enabled_title">Enable Trackpad Cursor</string>
+    <string name="trackpad_cursor_enabled_description">Press SYM+Shift to toggle cursor mode</string>
+    <string name="trackpad_cursor_help_text">When enabled, press SYM then Shift to toggle trackpad cursor mode. A semi-transparent cursor will appear on screen that you can control by swiping on the trackpad. Press Alt for left-click, Shift for right-click, or tap the trackpad to click. This feature requires Shizuku and overlay permission.</string>
+
     <!-- Trackpad Debug Accessibility Service -->
     <string name="trackpad_debug_service_description">Displays trackpad events in a small overlay for debugging purposes</string>
 </resources>

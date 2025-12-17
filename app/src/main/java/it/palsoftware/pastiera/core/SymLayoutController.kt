@@ -70,10 +70,10 @@ class SymLayoutController(
         persistSymPage()
         return true
     }
-    
+
     fun openClipboardPage(): Boolean {
         val clipboardPageValue = SymPage.CLIPBOARD.toPrefValue()
-        
+
         // Toggle behavior: open if closed, close if already open
         // Always allow direct access to clipboard page, even if disabled in cycling settings
         if (symPage == clipboardPageValue) {
@@ -128,7 +128,8 @@ class SymLayoutController(
         inputConnection: InputConnection?,
         ctrlLatchActive: Boolean,
         altLatchActive: Boolean,
-        updateStatusBar: () -> Unit
+        updateStatusBar: () -> Unit,
+        onTrackpadCursorToggle: (() -> Unit)? = null
     ): SymKeyResult {
         val autoCloseEnabled = SettingsManager.getSymAutoClose(context)
         val page = currentPageType()
@@ -142,6 +143,14 @@ class SymLayoutController(
                 if (autoCloseEnabled) {
                     closeSymAndUpdate(updateStatusBar)
                     return SymKeyResult.CALL_SUPER
+                }
+            }
+            KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
+                // SYM + Shift toggles trackpad cursor mode
+                if (onTrackpadCursorToggle != null && SettingsManager.getTrackpadCursorEnabled(context)) {
+                    closeSymAndUpdate(updateStatusBar)
+                    onTrackpadCursorToggle()
+                    return SymKeyResult.CONSUME
                 }
             }
             KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> {
