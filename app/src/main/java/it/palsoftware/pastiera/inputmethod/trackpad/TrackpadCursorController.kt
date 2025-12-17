@@ -50,7 +50,6 @@ class TrackpadCursorController(
     private val sensitivity = 2.0f
 
     private var isTouching = false
-    private var touchDownTime = 0L
     private var needsNewBaseline = true
     private var skipNextUpdate = false
 
@@ -241,17 +240,11 @@ class TrackpadCursorController(
                     val value = parts.last()
                     if (value == "DOWN") {
                         isTouching = true
-                        touchDownTime = System.currentTimeMillis()
                         needsNewBaseline = true
                         Log.d(TAG, "Touch down detected")
                     } else if (value == "UP" && isTouching) {
-                        val touchDuration = System.currentTimeMillis() - touchDownTime
                         isTouching = false
-                        // Only trigger tap if touch was brief (< 500ms)
-                        if (touchDuration < 500) {
-                            performTap()
-                        }
-                        Log.d(TAG, "Touch up detected (duration: ${touchDuration}ms)")
+                        Log.d(TAG, "Touch up detected")
                     }
                 }
             }
@@ -264,17 +257,11 @@ class TrackpadCursorController(
                     if (trackingId != null) {
                         if (trackingId != -1L && !isTouching) {
                             isTouching = true
-                            touchDownTime = System.currentTimeMillis()
                             needsNewBaseline = true
                             Log.d(TAG, "Touch down detected (tracking ID: $trackingId)")
                         } else if (trackingId == -1L && isTouching) {
-                            val touchDuration = System.currentTimeMillis() - touchDownTime
                             isTouching = false
-                            // Only trigger tap if touch was brief (< 500ms)
-                            if (touchDuration < 500) {
-                                performTap()
-                            }
-                            Log.d(TAG, "Touch up detected (duration: ${touchDuration}ms)")
+                            Log.d(TAG, "Touch up detected")
                         }
                     }
                 }
@@ -336,34 +323,6 @@ class TrackpadCursorController(
         // Update last position for next delta calculation
         lastTrackpadX = trackpadX
         lastTrackpadY = trackpadY
-    }
-
-    private fun performTap() {
-        scope.launch(Dispatchers.IO) {
-            try {
-                Log.d(TAG, "Performing tap at screen position ($cursorScreenX, $cursorScreenY)")
-
-                val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
-                    "newProcess",
-                    Array<String>::class.java,
-                    Array<String>::class.java,
-                    String::class.java
-                )
-                newProcessMethod.isAccessible = true
-
-                val process = newProcessMethod.invoke(
-                    null,
-                    arrayOf("input", "tap", cursorScreenX.toInt().toString(), cursorScreenY.toInt().toString()),
-                    null,
-                    null
-                ) as Process
-
-                process.waitFor()
-                Log.d(TAG, "Tap completed")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to perform tap: ${e.message}", e)
-            }
-        }
     }
 
     /**
