@@ -216,13 +216,13 @@ class InputEventRouter(
         val ctrlLatchFromNavMode: Boolean,
         val ctrlLatchActive: Boolean,
         val isInputViewActive: Boolean,
-        val isInputViewShown: Boolean,
+        val isImeSurfaceRequestedOrShown: Boolean,
         val hasInputConnection: Boolean
     )
 
     data class EditableFieldKeyDownCallbacks(
         val exitNavMode: () -> Unit,
-        val ensureInputViewCreated: () -> Unit,
+        val ensureImeSurfaceVisible: () -> Unit,
         val callSuper: () -> Boolean
     )
 
@@ -239,8 +239,12 @@ class InputEventRouter(
             return EditableFieldRoutingResult.CallSuper
         }
 
-        if (params.hasInputConnection && params.isInputViewActive && !params.isInputViewShown) {
-            callbacks.ensureInputViewCreated()
+        if (
+            params.hasInputConnection &&
+            params.isInputViewActive &&
+            !params.isImeSurfaceRequestedOrShown
+        ) {
+            callbacks.ensureImeSurfaceVisible()
         }
 
         return EditableFieldRoutingResult.Continue

@@ -29,15 +29,16 @@ class KeyboardVisibilityController(
     private val postToUi: (() -> Unit) -> Unit,
     private val postToUiDelayed: (delayMs: Long, action: () -> Unit) -> Unit,
     private val showInputWindow: (showInput: Boolean) -> Unit,
+    private val requestHideInputView: () -> Unit,
     private val requestShowInputView: () -> Unit,
     private val refreshStatusBar: () -> Unit
 ) {
 
     private var statusBarPresentationMode: SettingsManager.StatusBarPresentationMode =
         SettingsManager.getStatusBarPresentationMode(context)
-    private var evaluationGeneration = 0
     private var surfaceTransitionGeneration = 0
     private var pendingSurfaceTransition: PendingSurfaceTransition? = null
+    private var candidatesSurfaceRequested = false
 
     enum class RenderedSurface {
         HIDDEN,
@@ -73,36 +74,36 @@ class KeyboardVisibilityController(
             SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) ==
                 SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
         refreshStatusBar()
-        val generation = ++evaluationGeneration
-        // Apply candidates visibility after InputMethodService has finished evaluating
-        // and hiding its input frame. Showing it re-entrantly from this callback can be
-        // overwritten by the framework before the candidates view is created.
-        postToUi {
-            if (generation != evaluationGeneration) return@postToUi
-            setCandidatesSurfaceActive(!resolvedShowInputView)
-            setCandidatesViewShown(!resolvedShowInputView)
-            refreshStatusBar()
-            if (!resolvedShowInputView) {
-                // Showing candidates can synchronously create and attach their view. Android's
-                // enclosing fullscreenArea may still retain its previous INVISIBLE state, so
-                // synchronize that container on the following UI turn.
-                postToUi {
-                    if (generation != evaluationGeneration) return@postToUi
-                    synchronizeCandidatesContainerVisibility()
-                    refreshStatusBar()
-                }
-            }
-        }
         return resolvedShowInputView
     }
 
-    fun ensureInputViewCreated() {
+    fun ensureImeSurfaceVisible() {
         if (!isInputViewActive()) {
             return
         }
         if (currentInputConnection() == null) {
             return
         }
+        if (isNavModeLatched()) {
+            return
+        }
+
+        when (SettingsManager.resolveEffectiveSoftwareKeyboardMode(context)) {
+            SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL -> ensureFullInputViewVisible()
+            SettingsManager.SoftwareKeyboardMode.FORCE_HARDWARE,
+            SettingsManager.SoftwareKeyboardMode.AUTO ->
+                ensureCandidatesSurfaceVisible()
+        }
+    }
+
+    fun shouldShowSurfaceOnInputStart(autoShowKeyboardEnabled: Boolean): Boolean =
+        SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) !=
+            SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL || autoShowKeyboardEnabled
+
+    private fun ensureFullInputViewVisible() {
+        candidatesSurfaceRequested = false
+        setCandidatesSurfaceActive(false)
+        setCandidatesViewShown(false)
 
         val layout = candidatesBarController.getInputView(symLayoutController.emojiMapTextForLayout())
         refreshStatusBar()
@@ -111,13 +112,48 @@ class KeyboardVisibilityController(
             attachInputView(layout)
         }
 
-        if (!isInputViewShown() && !isNavModeLatched()) {
+        if (!isInputViewShown()) {
             try {
                 requestShowInputView()
             } catch (_: Exception) {
                 // Avoid crashing if the system rejects the request
             }
         }
+    }
+
+    private fun ensureCandidatesSurfaceVisible() {
+        setRequestedInputViewShown(false)
+        setCandidatesSurfaceActive(true)
+
+        if (!candidatesSurfaceRequested) {
+            candidatesSurfaceRequested = true
+            if (!requestCandidatesView()) return
+            refreshStatusBar()
+        }
+    }
+
+    fun onImeWindowVisibilityChanged(shown: Boolean) {
+        if (!shown && candidatesSurfaceRequested) {
+            candidatesSurfaceRequested = false
+            setCandidatesViewShown(false)
+        }
+        if (!shown) {
+            pendingSurfaceTransition
+                ?.takeIf { it.target == RenderedSurface.CANDIDATES_VIEW }
+                ?.let { transition ->
+                    postToUi {
+                        startCandidatesTransition(transition.generation)
+                    }
+                }
+        }
+    }
+
+    fun onCandidatesViewStarted() {
+        candidatesSurfaceRequested = true
+    }
+
+    fun onCandidatesViewFinished() {
+        candidatesSurfaceRequested = false
     }
 
     fun togglePastierinaMode() {
@@ -148,22 +184,11 @@ class KeyboardVisibilityController(
         ensureInputViewShown: Boolean,
         requireActiveTextField: Boolean = false
     ) {
-        evaluationGeneration += 1
         val generation = ++surfaceTransitionGeneration
         pendingSurfaceTransition = null
         refreshStatusBar()
         if ((requireActiveTextField && !hasActiveTextField()) || currentInputConnection() == null) {
             return
-        }
-
-        setCandidatesSurfaceActive(!ensureInputViewShown)
-        setCandidatesViewShown(!ensureInputViewShown)
-        if (!ensureInputViewShown) {
-            postToUi {
-                if (generation != surfaceTransitionGeneration) return@postToUi
-                synchronizeCandidatesContainerVisibility()
-                refreshStatusBar()
-            }
         }
 
         pendingSurfaceTransition = PendingSurfaceTransition(
@@ -175,7 +200,25 @@ class KeyboardVisibilityController(
             },
             requireActiveTextField = requireActiveTextField
         )
-        reconcilePendingSurfaceTransition(generation)
+        if (ensureInputViewShown) {
+            candidatesSurfaceRequested = false
+            setCandidatesSurfaceActive(false)
+            setCandidatesViewShown(false)
+            reconcilePendingSurfaceTransition(generation)
+        } else {
+            setCandidatesSurfaceActive(true)
+            candidatesSurfaceRequested = false
+            setCandidatesViewShown(false)
+            if (isInputViewShown()) {
+                try {
+                    requestHideInputView()
+                } catch (_: Exception) {
+                    startCandidatesTransition(generation)
+                }
+            } else {
+                startCandidatesTransition(generation)
+            }
+        }
     }
 
     fun cancelPendingSurfaceTransition() {
@@ -216,6 +259,48 @@ class KeyboardVisibilityController(
         scheduleSurfaceReconciliation(transition)
     }
 
+    private fun startCandidatesTransition(generation: Int) {
+        val transition = pendingSurfaceTransition
+            ?.takeIf {
+                it.generation == generation && it.target == RenderedSurface.CANDIDATES_VIEW
+            }
+            ?: return
+        if (
+            currentInputConnection() == null ||
+            (transition.requireActiveTextField && !hasActiveTextField())
+        ) {
+            abandonSurfaceTransition()
+            return
+        }
+
+        setRequestedInputViewShown(false)
+        setCandidatesSurfaceActive(true)
+        candidatesSurfaceRequested = true
+        if (!requestCandidatesView()) {
+            scheduleSurfaceReconciliation(transition)
+            return
+        }
+        refreshStatusBar()
+        postToUi {
+            if (generation != surfaceTransitionGeneration) return@postToUi
+            synchronizeCandidatesContainerVisibility()
+            refreshStatusBar()
+        }
+        // setCandidatesViewShown(true) is the primary candidates-only window request. Verify it
+        // after the framework has had a chance to present the window before using showWindow(false)
+        // as a bounded recovery path.
+        scheduleSurfaceReconciliation(transition)
+    }
+
+    private fun requestCandidatesView(): Boolean =
+        try {
+            setCandidatesViewShown(true)
+            true
+        } catch (_: Exception) {
+            candidatesSurfaceRequested = false
+            false
+        }
+
     private fun scheduleSurfaceReconciliation(transition: PendingSurfaceTransition) {
         if (transition.retryScheduled) return
         transition.retryScheduled = true
@@ -226,11 +311,22 @@ class KeyboardVisibilityController(
 
     fun isCandidatesOnlySurface(): Boolean = renderedSurface() == RenderedSurface.CANDIDATES_VIEW
 
+    fun isExpectedSurfaceRequestedOrShown(): Boolean =
+        if (
+            SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) ==
+            SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
+        ) {
+            isInputViewShown()
+        } else {
+            candidatesSurfaceRequested
+        }
+
     private fun abandonSurfaceTransition() {
         val actualSurface = renderedSurface()
         setRequestedInputViewShown(actualSurface == RenderedSurface.FULL_INPUT_VIEW)
         setCandidatesSurfaceActive(actualSurface == RenderedSurface.CANDIDATES_VIEW)
         setCandidatesViewShown(actualSurface == RenderedSurface.CANDIDATES_VIEW)
+        candidatesSurfaceRequested = actualSurface == RenderedSurface.CANDIDATES_VIEW
         pendingSurfaceTransition = null
         refreshStatusBar()
     }

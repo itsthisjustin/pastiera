@@ -1766,7 +1766,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 modifierStateBeforeHold = null
             }
             variationInteractedDuringHold = true
-            ensureInputViewCreated()
+            ensureImeSurfaceVisible()
             // Toggle clipboard as SYM page 3
             symLayoutController.openClipboardPage()
             updateStatusBarText()
@@ -1780,25 +1780,25 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 modifierStateBeforeHold = null
             }
             variationInteractedDuringHold = true
-            ensureInputViewCreated()
+            ensureImeSurfaceVisible()
             // Toggle emoji picker as SYM page 4
             symLayoutController.openEmojiPickerPage()
             updateStatusBarText()
         }
         candidatesBarController.onEmojiPageRequested = {
-            ensureInputViewCreated()
+            ensureImeSurfaceVisible()
             symLayoutController.openEmojiPage()
             updateStatusBarText()
         }
         // Register listener for symbols page
         candidatesBarController.onSymbolsPageRequested = {
-            ensureInputViewCreated()
+            ensureImeSurfaceVisible()
             // Toggle symbols as SYM page 2
             symLayoutController.openSymbolsPage()
             updateStatusBarText()
         }
         candidatesBarController.onSoftwareKeyboardSymToggleRequested = {
-            ensureInputViewCreated()
+            ensureImeSurfaceVisible()
             symLayoutController.toggleSymPage()
             updateStatusBarText()
         }
@@ -1956,6 +1956,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             postToUi = { action -> uiHandler.post(action) },
             postToUiDelayed = { delayMs, action -> uiHandler.postDelayed(action, delayMs) },
             showInputWindow = { showInput -> showWindow(showInput) },
+            requestHideInputView = { requestHideSelf(0) },
             requestShowInputView = ::requestKeyboardInputView,
             refreshStatusBar = {
                 invalidateRenderedStatusSnapshot()
@@ -2700,6 +2701,17 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
      */
     override fun onCreateCandidatesView(): View? = keyboardVisibilityController.onCreateCandidatesView()
 
+    override fun onStartCandidatesView(info: EditorInfo?, restarting: Boolean) {
+        super.onStartCandidatesView(info, restarting)
+        keyboardVisibilityController.onCandidatesViewStarted()
+        updateStatusBarText()
+    }
+
+    override fun onFinishCandidatesView(finishingInput: Boolean) {
+        super.onFinishCandidatesView(finishingInput)
+        keyboardVisibilityController.onCandidatesViewFinished()
+    }
+
     /**
      * Determines whether the input view (soft keyboard) should be shown.
      * Respects the system flag (e.g. "Mostra tastiera virtuale" off for tastiere fisiche):
@@ -2842,13 +2854,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     }
     
     /**
-     * Forces creation and display of the input view.
-     * Called when the first physical key is pressed.
-     * Shows the keyboard if there is an active text field.
-     * IMPORTANT: UI is never shown in nav mode.
+     * Shows the surface appropriate for the effective keyboard mode: the full input view in
+     * virtual mode, or the candidates/status surface in hardware mode.
      */
-    private fun ensureInputViewCreated() {
-        keyboardVisibilityController.ensureInputViewCreated()
+    private fun ensureImeSurfaceVisible() {
+        keyboardVisibilityController.ensureImeSurfaceVisible()
     }
     /**
      * Aggiorna la status bar delegando al controller dedicato.
@@ -3212,12 +3222,12 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             info.inputType = info.inputType or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         }
         
-        if (isEditable && !restarting) {
-            val autoShowKeyboardEnabled = SettingsManager.getAutoShowKeyboard(this)
-            if (autoShowKeyboardEnabled && isReallyEditable) {
-                if (!isInputViewShown && isInputViewActive) {
-                    ensureInputViewCreated()
-                }
+        if (isEditable && isReallyEditable && !restarting && isInputViewActive) {
+            val shouldShowSurface = keyboardVisibilityController.shouldShowSurfaceOnInputStart(
+                autoShowKeyboardEnabled = SettingsManager.getAutoShowKeyboard(this)
+            )
+            if (shouldShowSurface && !isInputViewShown) {
+                ensureImeSurfaceVisible()
             }
         }
         
@@ -3396,6 +3406,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     
     override fun onWindowShown() {
         super.onWindowShown()
+        keyboardVisibilityController.onImeWindowVisibilityChanged(shown = true)
         updateStatusBarText()
         attachTrackpadDecorViewMotionHook("onWindowShown")
     }
@@ -3856,6 +3867,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     
     override fun onWindowHidden() {
         super.onWindowHidden()
+        keyboardVisibilityController.onImeWindowVisibilityChanged(shown = false)
         SoftwareKeyboardAutoDetector.onInputWindowHidden()
         invalidateRenderedStatusSnapshot()
         if (::candidatesBarController.isInitialized) {
@@ -4035,7 +4047,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     }
 
     private fun toggleEmojiPicker() {
-        ensureInputViewCreated()
+        ensureImeSurfaceVisible()
         symLayoutController.openEmojiPickerPage()
         updateStatusBarText()
     }
@@ -4143,7 +4155,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         if (!isInputViewActive) {
             isInputViewActive = true
             if (!isInputViewShown) {
-                ensureInputViewCreated()
+                ensureImeSurfaceVisible()
             }
         }
         
@@ -4310,7 +4322,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 symLayoutController.closeSymPage()
                 updateStatusBarText()
             } else {
-                ensureInputViewCreated()
+                ensureImeSurfaceVisible()
                 symLayoutController.openEmojiPickerPage()
                 updateStatusBarText()
             }
@@ -4478,12 +4490,15 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 ctrlLatchFromNavMode = ctrlLatchFromNavMode,
                 ctrlLatchActive = ctrlLatchActive,
                 isInputViewActive = isInputViewActive,
-                isInputViewShown = isInputViewShown,
+                isImeSurfaceRequestedOrShown =
+                    keyboardVisibilityController.isExpectedSurfaceRequestedOrShown(),
                 hasInputConnection = hasEditableField
             ),
             callbacks = InputEventRouter.EditableFieldKeyDownCallbacks(
                 exitNavMode = { navModeController.exitNavMode() },
-                ensureInputViewCreated = { keyboardVisibilityController.ensureInputViewCreated() },
+                ensureImeSurfaceVisible = {
+                    keyboardVisibilityController.ensureImeSurfaceVisible()
+                },
                 callSuper = { super.onKeyDown(keyCode, event) }
             )
         )
@@ -4646,8 +4661,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             origin = "ime_service",
             unicodeCharOverride = debugUnicodeOverride
         )
-        if (!isInputViewShown && isInputViewActive) {
-            ensureInputViewCreated()
+        if (
+            isInputViewActive &&
+            !keyboardVisibilityController.isExpectedSurfaceRequestedOrShown()
+        ) {
+            ensureImeSurfaceVisible()
         }
         val ctrlActiveNow = event?.isCtrlPressed == true ||
             ctrlPressed ||
