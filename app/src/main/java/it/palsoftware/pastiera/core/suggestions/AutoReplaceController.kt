@@ -219,7 +219,7 @@ class AutoReplaceController(
         fun ensureTrailingSpace(connection: InputConnection): Boolean {
             val before = connection.getTextBeforeCursor(2, 0)?.toString().orEmpty()
             if (before.endsWith(" ")) {
-                return true
+                return false
             }
             connection.commitText(" ", 1)
             val afterCommit = connection.getTextBeforeCursor(2, 0)?.toString().orEmpty()

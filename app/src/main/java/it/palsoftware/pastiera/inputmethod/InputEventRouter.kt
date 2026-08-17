@@ -1085,8 +1085,7 @@ class InputEventRouter(
 
         // Handle suggestions on boundary keys/punctuation (if suggestions enabled)
         if (!shouldDisableSuggestions && inputConnection != null && (isBoundaryKey || isPunctuation) && suggestionController != null) {
-            suggestionController?.onBoundaryKey(keyCode, event, inputConnection)
-            return true
+            return suggestionController?.onBoundaryKey(keyCode, event, inputConnection)?.committed == true
         }
 
         autoCorrectionManager.handleAcceptOrResetOnOtherKeys(

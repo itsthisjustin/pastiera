@@ -18,6 +18,7 @@ import it.palsoftware.pastiera.core.suggestions.SuggestionSettings
 import java.util.Locale
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -111,6 +112,67 @@ class DisabledSmartFeaturesRegressionTest {
 
         assertTrue(handled)
         assertEquals("id ", inputConnection.text)
+    }
+
+    @Test
+    fun physicalKeyboardRepeatedSpaceFallsThroughWhenNoBoundaryWasCommitted() {
+        val inputConnection = FakeInputConnection(context, "id ")
+        val modifierStateController = ModifierStateController(500L)
+        val router = InputEventRouter(
+            context,
+            NavModeController(context, modifierStateController)
+        ).apply {
+            suggestionController = newDisabledSuggestionController()
+        }
+        val editorInfo = EditorInfo().apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_NONE
+        }
+
+        val handled = router.handleTextInputPipeline(
+            context = context,
+            keyCode = KeyEvent.KEYCODE_SPACE,
+            event = null,
+            inputConnection = inputConnection,
+            shouldDisableSuggestions = false,
+            shouldDisableAutoCorrect = false,
+            shouldDisableAutoCapitalize = true,
+            shouldDisableDoubleSpaceToPeriod = false,
+            isAutoCorrectEnabled = false,
+            textInputController = TextInputController(context, modifierStateController, 500L),
+            autoCorrectionManager = AutoCorrectionManager(context),
+            inputContextState = InputContextState.fromEditorInfo(editorInfo),
+            enableShiftOneShot = null,
+            editorInfo = editorInfo,
+            updateStatusBar = {}
+        )
+
+        assertFalse(handled)
+        assertEquals("id ", inputConnection.text)
+    }
+
+    @Test
+    fun onScreenKeyboardRepeatedSpaceCommitsAnotherSpaceWhenBoundaryAlreadyExists() {
+        val inputConnection = FakeInputConnection(context, "id ")
+        val suggestionController = newDisabledSuggestionController()
+        val modifierStateController = ModifierStateController(500L)
+
+        val handled = SoftwareKeyboardTextInputHandler.handleSpaceInput(
+            textInputController = TextInputController(context, modifierStateController, 500L),
+            inputConnection = inputConnection,
+            shouldDisableDoubleSpaceToPeriod = false,
+            shouldDisableAutoCapitalize = true,
+            shouldDisableSuggestions = false,
+            onDoubleSpaceHandled = {},
+            onNormalBoundary = {
+                suggestionController.onBoundaryKey(KeyEvent.KEYCODE_SPACE, null, inputConnection).committed
+            },
+            onCommitSpace = { inputConnection.commitText(" ", 1) },
+            onStatusBarUpdate = {}
+        )
+
+        assertTrue(handled)
+        assertEquals("id  ", inputConnection.text)
     }
 
     private fun newDisabledSuggestionController(): SuggestionController {
