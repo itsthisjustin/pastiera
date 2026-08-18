@@ -423,7 +423,7 @@ class VariationBarView(
                         }
                     }
                     staticVariationsShift
-                } else if (snapshot.altPhysicallyPressed || snapshot.altOneShot || snapshot.altLatchActive || snapshot.altLayerLatched) {
+                } else if (snapshot.altPhysicallyPressed || snapshot.altOneShot || snapshot.altLatchActive || snapshot.altModifierLayerLatched) {
                     if (staticVariationsAlt.isEmpty()) {
                         val loaded = VariationRepository.loadStaticVariationsAlt(context.assets, context)
                         staticVariationsAlt = if (loaded.isNotEmpty()) {

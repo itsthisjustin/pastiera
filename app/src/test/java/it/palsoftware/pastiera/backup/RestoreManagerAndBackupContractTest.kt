@@ -91,6 +91,18 @@ class RestoreManagerAndBackupContractTest {
     }
 
     @Test
+    fun currentAndLegacyAltModifierBindings_areRecognizedForRestore() {
+        assertEquals(
+            PreferenceValueType.STRING,
+            PreferenceSchemas.expectedType("pastiera_prefs", "alt_modifier_binding")
+        )
+        assertEquals(
+            PreferenceValueType.STRING,
+            PreferenceSchemas.expectedType("pastiera_prefs", "alt_character_layer_binding")
+        )
+    }
+
+    @Test
     fun quickLauncherPreferences_areRecognizedForRestore() {
         assertEquals(
             PreferenceValueType.STRING,

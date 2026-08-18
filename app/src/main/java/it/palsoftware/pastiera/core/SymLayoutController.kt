@@ -8,12 +8,12 @@ import android.view.KeyEvent
 import android.view.inputmethod.InputConnection
 import it.palsoftware.pastiera.SettingsManager
 import it.palsoftware.pastiera.SymPagesConfig
-import it.palsoftware.pastiera.inputmethod.AltSymManager
+import it.palsoftware.pastiera.inputmethod.AlternateCharacterManager
 
 class SymLayoutController(
     private val context: Context,
     private val prefs: SharedPreferences,
-    private val altSymManager: AltSymManager
+    private val alternateCharacterManager: AlternateCharacterManager
 ) {
 
     companion object {
@@ -150,14 +150,14 @@ class SymLayoutController(
     }
 
     fun emojiMapText(): String {
-        return if (currentPageType() == SymPage.EMOJI) altSymManager.buildEmojiMapText() else ""
+        return if (currentPageType() == SymPage.EMOJI) alternateCharacterManager.buildEmojiMapText() else ""
     }
 
     fun currentSymMappings(): Map<Int, String>? {
         return when (currentPageType()) {
-            SymPage.DEVICE -> altSymManager.getDeviceSymMappings()
-            SymPage.EMOJI -> altSymManager.getSymMappings()
-            SymPage.SYMBOLS -> altSymManager.getSymMappings2()
+            SymPage.DEVICE -> alternateCharacterManager.getDeviceSymMappings()
+            SymPage.EMOJI -> alternateCharacterManager.getSymMappings()
+            SymPage.SYMBOLS -> alternateCharacterManager.getSymMappings2()
             SymPage.CLIPBOARD -> null // Clipboard doesn't use mappings
             SymPage.EMOJI_PICKER -> null // Emoji picker doesn't use mappings
             else -> null
@@ -210,16 +210,16 @@ class SymLayoutController(
 
     private fun mappingsForPage(pageToUse: SymPage, shiftPressed: Boolean): Map<Int, String> {
         return when (pageToUse) {
-            SymPage.DEVICE -> altSymManager.getDeviceSymMappings()
+            SymPage.DEVICE -> alternateCharacterManager.getDeviceSymMappings()
             SymPage.EMOJI -> if (shiftPressed) {
-                altSymManager.getSymMappings() + altSymManager.getSymMappingsUppercase()
+                alternateCharacterManager.getSymMappings() + alternateCharacterManager.getSymMappingsUppercase()
             } else {
-                altSymManager.getSymMappings()
+                alternateCharacterManager.getSymMappings()
             }
             SymPage.SYMBOLS -> if (shiftPressed) {
-                altSymManager.getSymMappings2() + altSymManager.getSymMappings2Uppercase()
+                alternateCharacterManager.getSymMappings2() + alternateCharacterManager.getSymMappings2Uppercase()
             } else {
-                altSymManager.getSymMappings2()
+                alternateCharacterManager.getSymMappings2()
             }
             else -> emptyMap()
         }
@@ -237,19 +237,19 @@ class SymLayoutController(
         } ?: return null
 
         return when (pageToUse) {
-            SymPage.DEVICE -> altSymManager.getDeviceSymMappings()[keyCode]
+            SymPage.DEVICE -> alternateCharacterManager.getDeviceSymMappings()[keyCode]
             SymPage.EMOJI -> {
                 if (shiftPressed) {
-                    altSymManager.getSymMappingsUppercase()[keyCode] ?: altSymManager.getSymMappings()[keyCode]
+                    alternateCharacterManager.getSymMappingsUppercase()[keyCode] ?: alternateCharacterManager.getSymMappings()[keyCode]
                 } else {
-                    altSymManager.getSymMappings()[keyCode]
+                    alternateCharacterManager.getSymMappings()[keyCode]
                 }
             }
             SymPage.SYMBOLS -> {
                 if (shiftPressed) {
-                    altSymManager.getSymMappings2Uppercase()[keyCode] ?: altSymManager.getSymMappings2()[keyCode]
+                    alternateCharacterManager.getSymMappings2Uppercase()[keyCode] ?: alternateCharacterManager.getSymMappings2()[keyCode]
                 } else {
-                    altSymManager.getSymMappings2()[keyCode]
+                    alternateCharacterManager.getSymMappings2()[keyCode]
                 }
             }
             else -> null
@@ -286,9 +286,9 @@ class SymLayoutController(
         }
 
         val symChar = when (page) {
-            SymPage.DEVICE -> altSymManager.getDeviceSymMappings()[keyCode]
-            SymPage.EMOJI -> altSymManager.getSymMappings()[keyCode]
-            SymPage.SYMBOLS -> altSymManager.getSymMappings2()[keyCode]
+            SymPage.DEVICE -> alternateCharacterManager.getDeviceSymMappings()[keyCode]
+            SymPage.EMOJI -> alternateCharacterManager.getSymMappings()[keyCode]
+            SymPage.SYMBOLS -> alternateCharacterManager.getSymMappings2()[keyCode]
             SymPage.CLIPBOARD -> null // Clipboard doesn't use key mappings
             SymPage.EMOJI_PICKER -> null // Emoji picker doesn't use key mappings
             else -> null
@@ -315,10 +315,10 @@ class SymLayoutController(
     }
 
     fun handleKeyUp(keyCode: Int, shiftPressed: Boolean): Boolean {
-        return altSymManager.handleKeyUp(keyCode, isSymActive(), shiftPressed)
+        return alternateCharacterManager.handleKeyUp(keyCode, isSymActive(), shiftPressed)
     }
 
-    fun emojiMapTextForLayout(): String = altSymManager.buildEmojiMapText()
+    fun emojiMapTextForLayout(): String = alternateCharacterManager.buildEmojiMapText()
 
     private fun closeSymAndUpdate(updateStatusBar: () -> Unit) {
         if (closeSymPage()) {

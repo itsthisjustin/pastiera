@@ -3,6 +3,22 @@ package it.palsoftware.pastiera.inputmethod.aospkeyboard
 import android.view.KeyEvent
 
 internal object SoftwareKeyboardSymLabels {
+    data class Projection(
+        val contentByKeyCode: Map<Int, String>,
+        val contentByBaseText: Map<String, String>
+    )
+
+    fun project(
+        page: Int,
+        rows: List<String>,
+        symMappings: Map<Int, String>,
+        layoutName: String
+    ): Projection = Projection(
+        contentByKeyCode = symMappings.filterValues { it.isNotBlank() },
+        contentByBaseText = buildContentByChar(page, rows, symMappings, layoutName)
+            .mapKeys { (char, _) -> char.toString() }
+    )
+
     fun buildContentByChar(
         page: Int,
         rows: List<String>,

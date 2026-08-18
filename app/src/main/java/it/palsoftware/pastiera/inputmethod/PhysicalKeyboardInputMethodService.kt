@@ -51,6 +51,7 @@ import it.palsoftware.pastiera.data.layout.LayoutMappingRepository
 import it.palsoftware.pastiera.data.layout.LayoutFileStore
 import it.palsoftware.pastiera.data.layout.LayoutMapping
 import it.palsoftware.pastiera.data.mappings.KeyMappingLoader
+import it.palsoftware.pastiera.data.mappings.AltModifierMappingResolver
 import it.palsoftware.pastiera.data.variation.VariationRepository
 import it.palsoftware.pastiera.inputmethod.SpeechRecognitionActivity
 import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils
@@ -122,7 +123,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var lastSystemLocalesSignature: String = ""
 
-    private lateinit var altSymManager: AltSymManager
+    private lateinit var alternateCharacterManager: AlternateCharacterManager
     
     // Speech recognition using SpeechRecognizer (modern approach)
     private var speechRecognitionManager: SpeechRecognitionManager? = null
@@ -287,7 +288,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     private var modifierDownTimes = mutableMapOf<Int, Long>()
     private var otherKeyInteractedDuringHold: Boolean = false
     private var shiftLayerLatched: Boolean = false
-    private var altLayerLatched: Boolean = false
+    private var altModifierLayerLatched: Boolean = false
     private var lastShiftTapUpTime: Long = 0L
     private var lastAltTapUpTime: Long = 0L
     private var symTogglePendingOnKeyUp: Boolean = false
@@ -538,6 +539,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         clicksConnectionChanged: Boolean,
         clicksDisconnected: Boolean
     ) {
+        alternateCharacterManager.reloadModifierAndDeviceSymMappings()
+        updateStatusBarText()
         val autoMode = SoftwareKeyboardAutoDetector.resolve(this)
         val previousAutoMode = lastObservedAutoSoftwareKeyboardMode
         lastObservedAutoSoftwareKeyboardMode = autoMode
@@ -1128,7 +1131,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         altActive: Boolean
     ): Int? {
         if (!altActive) return null
-        val mapped = altSymManager.getAltMappings()[keyCode] ?: return null
+        val mapped = alternateCharacterManager.getAltModifierMappings()[keyCode] ?: return null
         if (mapped.isEmpty()) return null
         return mapped.codePointAt(0)
     }
@@ -1288,8 +1291,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         
         symLayoutController.restoreSymPageIfNeeded { updateStatusBarText() }
         
-        altSymManager.reloadLongPressThreshold()
-        altSymManager.resetTransientState()
+        alternateCharacterManager.reloadLongPressThreshold()
+        alternateCharacterManager.resetTransientState()
     }
     
     private fun enforceSmartFeatureDisabledState() {
@@ -1462,7 +1465,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         val tapResult = multiTapController.handleTap(keyCode, mapping, useUppercase, ic)
         if (tapResult.handled && allowLongPress) {
             tapResult.committedText?.let { committedText ->
-                altSymManager.scheduleLongPressOnly(keyCode, ic, committedText)
+                alternateCharacterManager.scheduleLongPressOnly(keyCode, ic, committedText)
             }
         }
         if (tapResult.handled) {
@@ -1653,9 +1656,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         )
         prepareEnabledExpansionAssets()
         candidatesBarController.onAddUserWord = { word ->
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1668,9 +1671,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             showAddSubstitutionDialog(word)
         }
         candidatesBarController.onSuggestionCommitted = {
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1697,9 +1700,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             }
         }
         candidatesBarController.onLanguageSwitchRequested = {
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1719,10 +1722,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             override fun onVariationSelected(variation: String) {
                 val keepLayerLatchedAfterVariation =
                     SettingsManager.isStaticVariationBarLayerStickyEnabled(this@PhysicalKeyboardInputMethodService)
-                val hasLatchedLayer = shiftLayerLatched || altLayerLatched
+                val hasLatchedLayer = shiftLayerLatched || altModifierLayerLatched
                 if (hasLatchedLayer && !keepLayerLatchedAfterVariation) {
                     shiftLayerLatched = false
-                    altLayerLatched = false
+                    altModifierLayerLatched = false
                     modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                     modifierStateBeforeHold = null
                 }
@@ -1735,9 +1738,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
 
         // Register listener for cursor movement (both controllers)
         val cursorListener = {
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1748,9 +1751,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
 
         // Register listener for speech recognition
         candidatesBarController.onSpeechRecognitionRequested = {
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1759,9 +1762,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
         // Register listener for clipboard page
         candidatesBarController.onClipboardRequested = {
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1773,9 +1776,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
         // Register listener for emoji picker page
         candidatesBarController.onEmojiPickerRequested = {
-            if (shiftLayerLatched || altLayerLatched) {
+            if (shiftLayerLatched || altModifierLayerLatched) {
                 shiftLayerLatched = false
-                altLayerLatched = false
+                altModifierLayerLatched = false
                 modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                 modifierStateBeforeHold = null
             }
@@ -1885,20 +1888,20 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 postClipboardBadgeUpdate()
             }
         })
-        altSymManager = AltSymManager(
+        alternateCharacterManager = AlternateCharacterManager(
             assets = assets,
             prefs = prefs,
             context = this,
             activeLayoutNameProvider = { activeKeyboardLayoutName }
         )
-        altSymManager.reloadSymMappings() // Load custom mappings for page 1 if present
-        altSymManager.reloadSymMappings2() // Load custom mappings for page 2 if present
-        altSymManager.onBoundaryTextRequested = { text, inputConnection ->
+        alternateCharacterManager.reloadSymMappings() // Load custom mappings for page 1 if present
+        alternateCharacterManager.reloadSymMappings2() // Load custom mappings for page 2 if present
+        alternateCharacterManager.onBoundaryTextRequested = { text, inputConnection ->
             handleBoundaryTextBeforeCommit(text, inputConnection)
         }
         // Register callback to be notified when an Alt character is inserted after long press.
         // Variations are updated automatically by updateStatusBarText().
-        altSymManager.onAltCharInserted = { char ->
+        alternateCharacterManager.onAltCharInserted = { char ->
             DeferredPunctuationSpaceTracker.onTextCommitted(this, char.toString())
             updateStatusBarText()
             val ic = currentInputConnection
@@ -1917,7 +1920,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             }
         }
         // Track normal characters committed via Alt short press (no long press triggered)
-        altSymManager.onNormalCharCommitted = { text ->
+        alternateCharacterManager.onNormalCharCommitted = { text ->
             if (::suggestionController.isInitialized) {
                 // Avoid double-tracking plain letters already handled by the main pipeline.
                 val ch = text.firstOrNull()
@@ -1929,7 +1932,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 }
             }
         }
-        symLayoutController = SymLayoutController(this, prefs, altSymManager)
+        symLayoutController = SymLayoutController(this, prefs, alternateCharacterManager)
         keyboardVisibilityController = KeyboardVisibilityController(
             context = this,
             candidatesBarController = candidatesBarController,
@@ -2006,8 +2009,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             if (key == "sym_mappings_custom") {
                 Log.d(TAG, "SYM mappings page 1 changed, reloading...")
                 // Reload SYM mappings for page 1
-                altSymManager.reloadSymMappings()
-                altSymManager.reloadAltMappings()
+                alternateCharacterManager.reloadSymMappings()
+                alternateCharacterManager.reloadModifierAndDeviceSymMappings()
                 // Update status bar to reflect new mappings
                 Handler(Looper.getMainLooper()).post {
                     updateStatusBarText()
@@ -2015,21 +2018,25 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             } else if (key == "sym_mappings_page2_custom") {
                 Log.d(TAG, "SYM mappings page 2 changed, reloading...")
                 // Reload SYM mappings for page 2
-                altSymManager.reloadSymMappings2()
-                altSymManager.reloadAltMappings()
+                alternateCharacterManager.reloadSymMappings2()
+                alternateCharacterManager.reloadModifierAndDeviceSymMappings()
                 // Update status bar to reflect new mappings
                 Handler(Looper.getMainLooper()).post {
                     updateStatusBarText()
                 }
             } else if (key == "sym_pages_config") {
                 Log.d(TAG, "SYM pages configuration changed, refreshing status bar...")
-                altSymManager.reloadAltMappings()
+                alternateCharacterManager.reloadModifierAndDeviceSymMappings()
                 Handler(Looper.getMainLooper()).post {
                     updateStatusBarText()
                 }
-            } else if (key == SettingsManager.KEY_ALT_CHARACTER_LAYER_BINDING) {
-                Log.d(TAG, "Alt character layer binding changed, reloading mappings...")
-                altSymManager.reloadAltMappings()
+            } else if (
+                key == SettingsManager.KEY_ALT_MODIFIER_BINDING ||
+                key == SettingsManager.LEGACY_KEY_ALT_CHARACTER_LAYER_BINDING
+            ) {
+                SettingsManager.getAltModifierBinding(this)
+                Log.d(TAG, "Alt modifier binding changed, reloading mappings...")
+                alternateCharacterManager.reloadModifierAndDeviceSymMappings()
                 Handler(Looper.getMainLooper()).post { updateStatusBarText() }
             } else if (key == "clear_alt_on_space") {
                 clearAltOnSpaceEnabled = SettingsManager.getClearAltOnSpace(this)
@@ -2041,15 +2048,15 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                     updateStatusBarText()
                 }
             } else if (key == "physical_keyboard_profile_override") {
-                Log.d(TAG, "Physical keyboard profile override changed, reloading Alt mappings...")
+                Log.d(TAG, "Physical keyboard profile override changed, reloading Device SYM and Alt modifier mappings...")
                 physicalKeyboardProfileOverride = SettingsManager.getPhysicalKeyboardProfileOverride(this)
-                altSymManager.reloadAltMappings()
+                alternateCharacterManager.reloadModifierAndDeviceSymMappings()
                 Handler(Looper.getMainLooper()).post {
                     updateStatusBarText()
                 }
             } else if (key == "physical_keyboard_currency_symbol") {
-                Log.d(TAG, "Physical keyboard currency symbol changed, reloading Alt mappings...")
-                altSymManager.reloadAltMappings()
+                Log.d(TAG, "Physical keyboard currency symbol changed, reloading Device SYM and Alt modifier mappings...")
+                alternateCharacterManager.reloadModifierAndDeviceSymMappings()
             } else if (key != null && (key.startsWith("auto_correct_custom_") || key == "auto_correct_enabled_languages")) {
                 Log.d(TAG, "Auto-correction rules changed, reloading...")
                 // Reload auto-corrections (including new custom languages)
@@ -2794,7 +2801,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
      */
     private fun resetModifierStates(preserveNavMode: Boolean = false) {
         shiftLayerLatched = false
-        altLayerLatched = false
+        altModifierLayerLatched = false
         lastShiftTapUpTime = 0L
         lastAltTapUpTime = 0L
         modifierStateBeforeHold = null
@@ -2805,7 +2812,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         )
         
         symLayoutController.reset()
-        altSymManager.resetTransientState()
+        alternateCharacterManager.resetTransientState()
         deactivateVariations()
         refreshStatusBar()
         navModeController.refreshNavModeState()
@@ -2891,6 +2898,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         val suggestionsStart = ImePerfLogger.mark()
         val baseSuggestions = if (suggestionsEnabled) visibleSuggestionStrings() else emptyList()
         suggestionsMs = ImePerfLogger.elapsedMs(suggestionsStart)
+        val softwareSymPreviewProjection = buildSoftwareSymPreviewProjection(modifierSnapshot)
         val snapshot = StatusBarController.StatusSnapshot(
             capsLockEnabled = modifierSnapshot.capsLockEnabled,
             shiftPhysicallyPressed = modifierSnapshot.shiftPhysicallyPressed,
@@ -2916,10 +2924,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             shouldDisableVariations = state.shouldDisableVariations,
             isEmailField = state.isEmailField,
             shiftLayerLatched = shiftLayerLatched,
-            altLayerLatched = altLayerLatched,
+            altModifierLayerLatched = altModifierLayerLatched,
             activeKeyboardLayoutName = activeKeyboardLayoutName,
-            softwareSymPreviewLabels = buildSoftwareSymPreviewLabels(modifierSnapshot),
-            softwareSymPreviewTextLabels = buildSoftwareSymPreviewTextLabels(modifierSnapshot),
+            softwareSymPreviewLabels = softwareSymPreviewProjection.contentByKeyCode,
+            softwareSymPreviewTextLabels = softwareSymPreviewProjection.contentByBaseText,
             softwareCtrlPreviewLabels = buildSoftwareCtrlPreviewLabels(modifierSnapshot),
             softwareCtrlPreviewIconRes = buildSoftwareCtrlPreviewIconRes(modifierSnapshot),
             softwareCtrlPreviewActive = shouldShowSoftwareCtrlPreview(modifierSnapshot),
@@ -2964,26 +2972,17 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         )
     }
 
-    private fun buildSoftwareSymPreviewLabels(
+    private fun buildSoftwareSymPreviewProjection(
         modifierSnapshot: it.palsoftware.pastiera.core.ModifierStateController.Snapshot
-    ): Map<Int, String> {
-        val shiftActive = modifierSnapshot.capsLockEnabled ||
-            modifierSnapshot.shiftPhysicallyPressed ||
-            modifierSnapshot.shiftOneShot
-        return symLayoutController.previewNextSoftwareSymPageMappings(shiftActive)
-    }
-
-    private fun buildSoftwareSymPreviewTextLabels(
-        modifierSnapshot: it.palsoftware.pastiera.core.ModifierStateController.Snapshot
-    ): Map<String, String> {
+    ): SoftwareKeyboardSymLabels.Projection {
         val shiftActive = modifierSnapshot.capsLockEnabled ||
             modifierSnapshot.shiftPhysicallyPressed ||
             modifierSnapshot.shiftOneShot
         val mappings = symLayoutController.previewNextSoftwareSymPageMappings(shiftActive)
         if (mappings.isEmpty()) {
-            return emptyMap()
+            return SoftwareKeyboardSymLabels.Projection(emptyMap(), emptyMap())
         }
-        return SoftwareKeyboardSymLabels.buildContentByChar(
+        return SoftwareKeyboardSymLabels.project(
             page = symLayoutController.nextSoftwareTextSymPage(),
             rows = SoftwareKeyboardLayoutTemplates.rowTemplateFor(
                 activeKeyboardLayoutName,
@@ -2991,7 +2990,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             ),
             symMappings = mappings,
             layoutName = activeKeyboardLayoutName
-        ).mapKeys { (char, _) -> char.toString() }
+        )
     }
 
     private fun softwareKeyboardLayoutStyle(): AospKeyboardView.SoftwareLayoutStyle =
@@ -3054,7 +3053,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         if (!shouldShowSoftwareAltPreview(modifierSnapshot)) {
             return emptyMap()
         }
-        val altMappings = KeyMappingLoader.loadVirtualAltKeyMappings(assets, this)
+        val altMappings = AltModifierMappingResolver.resolve(assets, this)
         return SOFTWARE_PREVIEW_KEY_CODES.mapNotNull { keyCode ->
             val label = altMappings[keyCode]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             keyCode to label
@@ -4160,7 +4159,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
         
         // Intercept long presses BEFORE Android handles them
-        if (altSymManager.hasAltMapping(keyCode)) {
+        if (alternateCharacterManager.hasAltMapping(keyCode)) {
             // Consumiamo l'evento per evitare il popup di Android
             return true
         }
@@ -4308,7 +4307,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             symChordUsedSinceKeyDown = false
         }
 
-        // Minimal Phone dedicated keys (skip when Alt is active in any form so alt mappings can fire)
+        // Minimal Phone dedicated keys (skip while Alt is active so its configured mapping can run)
         // Gate this behavior to Minimal Phone devices only.
         val altActiveForDedicatedKeys = event?.isAltPressed == true || altLatchActive || altOneShot
         if (
@@ -4430,8 +4429,8 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 updateStatusBarText()
                 return true
             }
-            if ((keyCode == KeyEvent.KEYCODE_ALT_LEFT || keyCode == KeyEvent.KEYCODE_ALT_RIGHT) && altLayerLatched) {
-                altLayerLatched = false
+            if ((keyCode == KeyEvent.KEYCODE_ALT_LEFT || keyCode == KeyEvent.KEYCODE_ALT_RIGHT) && altModifierLayerLatched) {
+                altModifierLayerLatched = false
                 lastAltTapUpTime = 0L
                 // Tapping ALT while the visual Device SYM layer is latched should fully disable Alt.
                 // Restoring the pre-hold snapshot here can resurrect stale one-shot/latch state.
@@ -4761,7 +4760,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 capsLockEnabled = capsLockEnabled,
                 cursorUpdateDelayMs = CURSOR_UPDATE_DELAY,
                 altMappingsOverride = if (dispatchingSoftwareKeyboardKey) {
-                    KeyMappingLoader.loadVirtualAltKeyMappings(assets, this)
+                    AltModifierMappingResolver.resolve(assets, this)
                 } else {
                     null
                 },
@@ -4770,7 +4769,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             controllers = InputEventRouter.EditableFieldKeyDownControllers(
                 modifierStateController = modifierStateController,
                 symLayoutController = symLayoutController,
-                altSymManager = altSymManager,
+                alternateCharacterManager = alternateCharacterManager,
                 variationStateController = variationStateController,
                 textInputController = textInputController
             ),
@@ -5024,7 +5023,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 if (isIntentionalHold) {
                     modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
                     // Sticky layer activation is handled via double-tap, not hold.
-                    altLayerLatched = false
+                    altModifierLayerLatched = false
                     lastAltTapUpTime = 0L
                     variationInteractedDuringHold = false
                     otherKeyInteractedDuringHold = false
@@ -5041,7 +5040,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                     if (stickyEnabled && isQuickTap) {
                         val now = event?.eventTime ?: System.currentTimeMillis()
                         if (lastAltTapUpTime > 0L && now - lastAltTapUpTime <= DOUBLE_TAP_THRESHOLD) {
-                            altLayerLatched = true
+                            altModifierLayerLatched = true
                             lastAltTapUpTime = 0L
                             updateStatusBarText()
                         } else {
@@ -5084,14 +5083,14 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
      * Aggiunge una nuova mappatura Alt+tasto -> carattere.
      */
     fun addAltKeyMapping(keyCode: Int, character: String) {
-        altSymManager.addAltKeyMapping(keyCode, character)
+        alternateCharacterManager.addAltKeyMapping(keyCode, character)
     }
 
     /**
      * Rimuove una mappatura Alt+tasto esistente.
      */
     fun removeAltKeyMapping(keyCode: Int) {
-        altSymManager.removeAltKeyMapping(keyCode)
+        alternateCharacterManager.removeAltKeyMapping(keyCode)
     }
     
     /**
@@ -5475,9 +5474,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         val visibleSuggestions = visibleSuggestionStrings()
 
         // Clear latched UI layers when selecting a suggestion via trackpad.
-        if (shiftLayerLatched || altLayerLatched) {
+        if (shiftLayerLatched || altModifierLayerLatched) {
             shiftLayerLatched = false
-            altLayerLatched = false
+            altModifierLayerLatched = false
             modifierStateBeforeHold?.let { modifierStateController.restoreLogicalState(it) }
             modifierStateBeforeHold = null
         }

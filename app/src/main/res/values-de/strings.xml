@@ -92,7 +92,7 @@
     <string name="sym_customization_button">SYM-Layer anpassen</string>
     <string name="sym_customization_description">Geräte-, Emoji- und Symbol-SYM-Layer anordnen und anpassen.</string>
     <string name="device_sym_layer_title">Geräte-SYM-Layer anpassen</string>
-    <string name="device_sym_layer_description">Gerätespezifische Zweitbelegung; vormals Alt-Layer.</string>
+    <string name="device_sym_layer_description">Gerätespezifische Zweitbelegung.</string>
     <string name="reset_to_default">Auf Standard zurücksetzen</string>
     <string name="select_emoji">Emoji auswählen</string>
     <string name="close">Schließen</string>
@@ -165,15 +165,15 @@
     <string name="sym_cycle_type_panel">Panel</string>
     <string name="sym_move_up">Nach oben</string>
     <string name="sym_move_down">Nach unten</string>
-    <string name="alt_binding_title">Alt-Zeichen-Layer</string>
-    <string name="alt_binding_description">Wählen Sie, welchen Tasten-Layer Alt verwendet. Dies ist unabhängig von der Sichtbarkeit im SYM-Cycle.</string>
+    <string name="alt_binding_title">Alt-Modifier-Zuordnung</string>
+    <string name="alt_binding_description">Wählen Sie, welche SYM-Belegung der Alt-Modifier auslöst. Die Sichtbarkeit im SYM-Zyklus bleibt unabhängig.</string>
     <string name="alt_binding_current_device">Geräte-SYM-Layer · Aktuelle Eingabequelle</string>
     <string name="alt_binding_first_key_layer">Erster Tasten-Layer der SYM-Reihenfolge</string>
     <string name="modifiers_title">Modifier</string>
     <string name="modifiers_description">SYM-Layer, langer Druck, Modifier-Verhalten und Anzeigen</string>
     <string name="modifiers_section_sym">SYM</string>
     <string name="modifiers_section_long_press">Langer Druck</string>
-    <string name="modifiers_section_alt_layer">Alt-Taste</string>
+    <string name="modifiers_section_alt_modifier">Alt-Taste</string>
     <string name="modifiers_section_indicators">Modifier-Anzeigen</string>
     <string name="sym_modifiers_deeplink_description">Wählen Sie in den Modifier-Einstellungen, welchen SYM-Layer Alt verwendet.</string>
     <string name="sym_behavior_section_title">SYM-Verhalten und Anzeige</string>
@@ -855,7 +855,7 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="tutorial_variations_button">Variationen</string>
     <string name="tutorial_status_bar_button">Statusleiste</string>
     <string name="tutorial_sym_emoji_button">SYM / Emoji</string>
-    <string name="tutorial_device_sym_layer_title">Alt-Layer heißt jetzt Geräte-SYM-Layer</string>
+    <string name="tutorial_device_sym_layer_title">Gerätespezifische Zeichen verwenden Geräte-SYM</string>
     <string name="tutorial_device_sym_layer_description">Pastiera nennt die gerätespezifische Zweitbelegung jetzt Geräte-SYM-Layer. Alt bleibt die Modifier-Taste, die ihn auslösen kann; Emoji und Symbole sind weitere SYM-Layer.</string>
     <string name="tutorial_software_keyboard_hardware_bullet">Kompakte Oberfläche für Geräte mit physischen Tasten.</string>
     <string name="tutorial_software_keyboard_virtual_bullet">Vollständige Bildschirmtastatur für Touch-Nutzung. Noch Alpha.</string>

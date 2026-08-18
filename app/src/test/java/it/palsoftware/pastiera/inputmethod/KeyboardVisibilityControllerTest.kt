@@ -329,8 +329,8 @@ class KeyboardVisibilityControllerTest {
     ): VisibilityHarness {
         val context = RuntimeEnvironment.getApplication()
         val prefs = context.getSharedPreferences("keyboard_visibility_controller_test", Context.MODE_PRIVATE)
-        val altSymManager = AltSymManager(context.assets, prefs, context)
-        val symLayoutController = SymLayoutController(context, prefs, altSymManager)
+        val alternateCharacterManager = AlternateCharacterManager(context.assets, prefs, context)
+        val symLayoutController = SymLayoutController(context, prefs, alternateCharacterManager)
         val candidatesBarController = CandidatesBarController(context)
         var candidatesViewShown = false
         var candidatesVisibilityChanges = 0

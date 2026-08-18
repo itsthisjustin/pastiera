@@ -16,6 +16,7 @@ import it.palsoftware.pastiera.SymPagesConfig
 import it.palsoftware.pastiera.data.layout.LayoutMapping
 import it.palsoftware.pastiera.data.layout.TapMapping
 import it.palsoftware.pastiera.data.mappings.KeyMappingLoader
+import it.palsoftware.pastiera.data.mappings.DeviceSymProfileResolver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -35,7 +36,7 @@ class InputEventRouterModifierE2ETest {
     private lateinit var context: Context
     private lateinit var modifierStateController: ModifierStateController
     private lateinit var router: InputEventRouter
-    private lateinit var altSymManager: AltSymManager
+    private lateinit var alternateCharacterManager: AlternateCharacterManager
     private lateinit var symLayoutController: SymLayoutController
     private lateinit var variationStateController: VariationStateController
     private lateinit var ctrlKeyMap: Map<Int, KeyMappingLoader.CtrlMapping>
@@ -65,10 +66,10 @@ class InputEventRouterModifierE2ETest {
         val navModeController = NavModeController(context, modifierStateController)
         router = InputEventRouter(context, navModeController)
 
-        altSymManager = AltSymManager(context.assets, prefs, context)
-        altSymManager.reloadSymMappings()
-        altSymManager.reloadSymMappings2()
-        symLayoutController = SymLayoutController(context, prefs, altSymManager)
+        alternateCharacterManager = AlternateCharacterManager(context.assets, prefs, context)
+        alternateCharacterManager.reloadSymMappings()
+        alternateCharacterManager.reloadSymMappings2()
+        symLayoutController = SymLayoutController(context, prefs, alternateCharacterManager)
         variationStateController = VariationStateController(emptyMap())
         ctrlKeyMap = KeyMappingLoader.loadCtrlKeyMappings(context.assets, context)
 
@@ -324,7 +325,7 @@ class InputEventRouterModifierE2ETest {
         )
         SettingsManager.setMidWordQuoteToApostrophe(context, true)
         SettingsManager.setAutoSpacePunctuation(context, "\"")
-        altSymManager.reloadAltMappings()
+        alternateCharacterManager.reloadModifierAndDeviceSymMappings()
         inputConnectionRecorder.textBeforeCursor = "qu"
         val callbacks = TestCallbacks(modifierStateController)
         modifierStateController.altOneShot = true
@@ -357,7 +358,7 @@ class InputEventRouterModifierE2ETest {
             product = "titan2"
         )
         SettingsManager.setMidWordQuoteToApostrophe(context, true)
-        altSymManager.reloadAltMappings()
+        alternateCharacterManager.reloadModifierAndDeviceSymMappings()
         inputConnectionRecorder.textBeforeCursor = ""
         val callbacks = TestCallbacks(modifierStateController)
         modifierStateController.altOneShot = true
@@ -390,7 +391,7 @@ class InputEventRouterModifierE2ETest {
             product = "titan2"
         )
         SettingsManager.setFrenchPunctuationSpacing(context, true)
-        altSymManager.reloadAltMappings()
+        alternateCharacterManager.reloadModifierAndDeviceSymMappings()
         inputConnectionRecorder.textBeforeCursor = "bonjour"
         val callbacks = TestCallbacks(modifierStateController)
         modifierStateController.altOneShot = true
@@ -408,13 +409,9 @@ class InputEventRouterModifierE2ETest {
     }
 
     @Test
-    fun symEmojiPage_defaultLayout_mapsA_andConsumes() {
+    fun symDevicePage_newDefault_mapsA_andConsumes() {
         val callbacks = TestCallbacks(modifierStateController)
-        if (!altSymManager.getSymMappings().containsKey(KeyEvent.KEYCODE_A)) {
-            SettingsManager.saveSymMappings(context, mapOf(KeyEvent.KEYCODE_A to "😢"))
-            altSymManager.reloadSymMappings()
-        }
-        symLayoutController.toggleSymPage() // opens first text page (emoji in default config)
+        symLayoutController.toggleSymPage() // opens Device SYM in the new default config
         assertTrue(symLayoutController.isSymActive())
 
         val result = routeKeyDown(
@@ -427,16 +424,16 @@ class InputEventRouterModifierE2ETest {
         assertTrue(inputConnectionRecorder.committedTexts.isNotEmpty())
         assertTrue(
             "commits=${inputConnectionRecorder.committedTexts}",
-            inputConnectionRecorder.committedTexts.contains("😢")
+            inputConnectionRecorder.committedTexts.contains("@")
         )
     }
 
     @Test
     fun symSymbolsPage_defaultLayout_mapsA_andConsumes() {
         val callbacks = TestCallbacks(modifierStateController)
-        if (!altSymManager.getSymMappings2().containsKey(KeyEvent.KEYCODE_A)) {
+        if (!alternateCharacterManager.getSymMappings2().containsKey(KeyEvent.KEYCODE_A)) {
             SettingsManager.saveSymMappingsPage2(context, mapOf(KeyEvent.KEYCODE_A to "="))
-            altSymManager.reloadSymMappings2()
+            alternateCharacterManager.reloadSymMappings2()
         }
         symLayoutController.openSymbolsPage()
         assertTrue(symLayoutController.isSymActive())
@@ -459,8 +456,8 @@ class InputEventRouterModifierE2ETest {
     fun symEmojiPage_customMapping_isUsed() {
         val callbacks = TestCallbacks(modifierStateController)
         SettingsManager.saveSymMappings(context, mapOf(KeyEvent.KEYCODE_A to "🧪"))
-        altSymManager.reloadSymMappings()
-        symLayoutController.toggleSymPage()
+        alternateCharacterManager.reloadSymMappings()
+        symLayoutController.openEmojiPage()
 
         val result = routeKeyDown(
             keyCode = KeyEvent.KEYCODE_A,
@@ -476,7 +473,7 @@ class InputEventRouterModifierE2ETest {
     fun symSymbolsPage_customMapping_isUsed() {
         val callbacks = TestCallbacks(modifierStateController)
         SettingsManager.saveSymMappingsPage2(context, mapOf(KeyEvent.KEYCODE_A to "#"))
-        altSymManager.reloadSymMappings2()
+        alternateCharacterManager.reloadSymMappings2()
         symLayoutController.openSymbolsPage()
 
         val result = routeKeyDown(
@@ -492,7 +489,7 @@ class InputEventRouterModifierE2ETest {
     @Test
     fun symSymbolsPage_boundaryMapping_usesBoundaryHandlerBeforeCommit() {
         SettingsManager.saveSymMappingsPage2(context, mapOf(KeyEvent.KEYCODE_S to ";"))
-        altSymManager.reloadSymMappings2()
+        alternateCharacterManager.reloadSymMappings2()
         symLayoutController.openSymbolsPage()
         val boundaryTexts = mutableListOf<String>()
         val callbacks = TestCallbacks(
@@ -524,7 +521,7 @@ class InputEventRouterModifierE2ETest {
             product = "q25"
         )
         rebuildAltSymControllers()
-        assertEquals("Q25", KeyMappingLoader.getDeviceName(context))
+        assertEquals("Q25", DeviceSymProfileResolver.resolve(context))
 
         val callbacks = TestCallbacks(modifierStateController)
         primeAltOneShot(callbacks)
@@ -549,7 +546,7 @@ class InputEventRouterModifierE2ETest {
             product = "q25"
         )
         rebuildAltSymControllers()
-        assertEquals("Q25", KeyMappingLoader.getDeviceName(context))
+        assertEquals("Q25", DeviceSymProfileResolver.resolve(context))
 
         val callbacks = TestCallbacks(modifierStateController)
         primeAltOneShot(callbacks)
@@ -610,7 +607,7 @@ class InputEventRouterModifierE2ETest {
             product = "lineage_athena"
         )
         rebuildAltSymControllers()
-        assertEquals("key2", KeyMappingLoader.getDeviceName(context))
+        assertEquals("key2", DeviceSymProfileResolver.resolve(context))
 
         val callbacks = TestCallbacks(modifierStateController)
         primeAltOneShot(callbacks)
@@ -636,7 +633,7 @@ class InputEventRouterModifierE2ETest {
         )
         SettingsManager.setPhysicalKeyboardProfileOverride(context, "titan2elite_qwerty")
         rebuildAltSymControllers()
-        assertEquals("titan2elite_qwerty", KeyMappingLoader.getDeviceName(context))
+        assertEquals("titan2elite_qwerty", DeviceSymProfileResolver.resolve(context))
 
         val callbacks = TestCallbacks(modifierStateController)
         primeAltOneShot(callbacks)
@@ -661,7 +658,7 @@ class InputEventRouterModifierE2ETest {
             product = "unknown"
         )
         rebuildAltSymControllers()
-        assertEquals("unknown", KeyMappingLoader.getDeviceName(context))
+        assertEquals("virtual", DeviceSymProfileResolver.resolve(context))
 
         val callbacks = TestCallbacks(modifierStateController)
         primeAltOneShot(callbacks)
@@ -875,7 +872,7 @@ class InputEventRouterModifierE2ETest {
             controllers = InputEventRouter.EditableFieldKeyDownControllers(
                 modifierStateController = modifierStateController,
                 symLayoutController = symLayoutController,
-                altSymManager = altSymManager,
+                alternateCharacterManager = alternateCharacterManager,
                 variationStateController = variationStateController,
                 textInputController = TextInputController(context, modifierStateController, 500L)
             ),
@@ -933,10 +930,10 @@ class InputEventRouterModifierE2ETest {
     }
 
     private fun rebuildAltSymControllers() {
-        altSymManager = AltSymManager(context.assets, prefs, context)
-        altSymManager.reloadSymMappings()
-        altSymManager.reloadSymMappings2()
-        symLayoutController = SymLayoutController(context, prefs, altSymManager)
+        alternateCharacterManager = AlternateCharacterManager(context.assets, prefs, context)
+        alternateCharacterManager.reloadSymMappings()
+        alternateCharacterManager.reloadSymMappings2()
+        symLayoutController = SymLayoutController(context, prefs, alternateCharacterManager)
         inputConnectionRecorder.committedTexts.clear()
     }
 

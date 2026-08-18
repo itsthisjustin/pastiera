@@ -193,7 +193,7 @@
     <string name="sym_customization_button">Customize SYM Layers</string>
     <string name="sym_customization_description">Arrange and customize Device, Emoji, and Symbols SYM layers.</string>
     <string name="device_sym_layer_title">Customize Device SYM Layer</string>
-    <string name="device_sym_layer_description">Device-specific secondary characters; formerly called the Alt Layer.</string>
+    <string name="device_sym_layer_description">Device-specific secondary-character mapping.</string>
     <string name="reset_to_default">Reset to Default</string>
     <string name="select_emoji">Select Emoji</string>
     <string name="close">Close</string>
@@ -285,15 +285,15 @@
     <string name="sym_cycle_type_panel">Panel</string>
     <string name="sym_move_up">Move up</string>
     <string name="sym_move_down">Move down</string>
-    <string name="alt_binding_title">Alt character layer</string>
-    <string name="alt_binding_description">Choose which key layer Alt uses. This is independent of SYM cycle visibility.</string>
+    <string name="alt_binding_title">Alt modifier binding</string>
+    <string name="alt_binding_description">Choose which SYM mapping the Alt modifier triggers. SYM cycle visibility remains independent.</string>
     <string name="alt_binding_current_device">Device SYM Layer · Current input source</string>
     <string name="alt_binding_first_key_layer">First key layer in SYM order</string>
     <string name="modifiers_title">Modifiers</string>
     <string name="modifiers_description">SYM layers, long press, modifier behaviour, and indicators</string>
     <string name="modifiers_section_sym">SYM</string>
     <string name="modifiers_section_long_press">Long press</string>
-    <string name="modifiers_section_alt_layer">Alt key</string>
+    <string name="modifiers_section_alt_modifier">Alt key</string>
     <string name="modifiers_section_indicators">Modifier indicators</string>
     <string name="modifiers_section_control">Control</string>
     <string name="modifier_control_nav_mode_title">Control in Nav Mode</string>
@@ -1273,7 +1273,7 @@ Each key can be configured as Keycode, Action, Native Ctrl, or None. Use overrid
     <string name="tutorial_typing_sound_demo_description">Choose a sound style and type below to hear it immediately.</string>
     <string name="tutorial_typing_sound_demo_input_label">Try typing here</string>
     <string name="tutorial_sym_emoji_button">SYM / Emoji</string>
-    <string name="tutorial_device_sym_layer_title">Alt Layer is now Device SYM Layer</string>
+    <string name="tutorial_device_sym_layer_title">Device-specific characters use Device SYM</string>
     <string name="tutorial_device_sym_layer_description">Pastiera now calls the device-specific secondary-character mapping the Device SYM Layer. Alt remains the modifier key that can trigger it; Emoji and Symbols are additional SYM layers.</string>
     <string name="tutorial_variations_button">Variations</string>
     <string name="tutorial_status_bar_button">Status bar</string>

@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import it.palsoftware.pastiera.data.mappings.KeyMappingLoader
+import it.palsoftware.pastiera.data.mappings.AltModifierMappingResolver
+import it.palsoftware.pastiera.data.mappings.DeviceSymMappingRepository
 import it.palsoftware.pastiera.data.variation.VariationRepository
 import it.palsoftware.pastiera.inputmethod.StatusBarController
 import it.palsoftware.pastiera.inputmethod.aospkeyboard.AospKeyboardView
@@ -655,14 +657,15 @@ private fun previewEnabledSymPageValues(context: Context): List<Int> {
             SymPagesConfig.PAGE_SYMBOLS -> 2
             SymPagesConfig.PAGE_CLIPBOARD -> 3
             SymPagesConfig.PAGE_EMOJI_PICKER -> 4
+            SymPagesConfig.PAGE_DEVICE -> 5
             else -> null
         }
     }
 }
 
 private fun AospKeyboardView.applyVirtualKeyboardSymPreviewState(context: Context, page: Int, shiftActive: Boolean) {
-    symPageActive = page in 1..2
-    if (page !in 1..2) {
+    symPageActive = page in listOf(1, 2, 5)
+    if (page !in listOf(1, 2, 5)) {
         symPageLabels = emptyMap()
         symPageTextLabels = emptyMap()
         return
@@ -670,13 +673,14 @@ private fun AospKeyboardView.applyVirtualKeyboardSymPreviewState(context: Contex
     val mappings = previewSymMappings(context, page, shiftActive)
     val layout = SettingsManager.getKeyboardLayout(context)
     val style = softwareKeyboardPreviewLayoutStyle(context)
-    symPageLabels = mappings
-    symPageTextLabels = SoftwareKeyboardSymLabels.buildContentByChar(
+    val projection = SoftwareKeyboardSymLabels.project(
         page = page,
         rows = SoftwareKeyboardLayoutTemplates.rowTemplateFor(layout, style),
         symMappings = mappings,
         layoutName = layout
-    ).mapKeys { (char, _) -> char.toString() }
+    )
+    symPageLabels = projection.contentByKeyCode
+    symPageTextLabels = projection.contentByBaseText
 }
 
 private fun previewSymMappings(context: Context, page: Int, shiftActive: Boolean): Map<Int, String> {
@@ -699,6 +703,7 @@ private fun previewSymMappings(context: Context, page: Int, shiftActive: Boolean
                 base
             }
         }
+        5 -> DeviceSymMappingRepository.load(context.assets, context)
         else -> emptyMap()
     }
 }
@@ -711,7 +716,7 @@ private fun resolveVirtualPreviewLongPressAlternates(context: Context, output: S
         SettingsManager.getKeyboardLayout(context)
     ) ?: return emptyList()
     return when (SettingsManager.getLongPressModifier(context)) {
-        "alt" -> KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)[keyCode]?.let(::listOf).orEmpty()
+        "alt" -> AltModifierMappingResolver.resolve(context.assets, context)[keyCode]?.let(::listOf).orEmpty()
         "shift" -> listOf(output.uppercase()).filter { it != output }
         "sym", "sym_symbols", "sym_emoji" -> {
             val page = SettingsManager.resolveLongPressSymPage(context)
@@ -735,7 +740,7 @@ private fun resolveVirtualPreviewAltHint(context: Context, output: String): Stri
         output.first(),
         SettingsManager.getKeyboardLayout(context)
     ) ?: return null
-    return KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)[keyCode]
+    return AltModifierMappingResolver.resolve(context.assets, context)[keyCode]
 }
 
 private fun resolveVirtualPreviewLongPressLayerAlternates(
@@ -750,7 +755,7 @@ private fun resolveVirtualPreviewLongPressLayerAlternates(
         SettingsManager.getKeyboardLayout(context)
     ) ?: return emptyList()
     val alternatives = mutableListOf<AospKeyboardView.LongPressLayerAlternative>()
-    KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)[keyCode]?.takeIf { it.isNotBlank() }?.let { alt ->
+    AltModifierMappingResolver.resolve(context.assets, context)[keyCode]?.takeIf { it.isNotBlank() }?.let { alt ->
         alternatives += AospKeyboardView.LongPressLayerAlternative(label = alt, output = alt)
     }
     SettingsManager.getSymPagesConfig(context)
@@ -770,7 +775,7 @@ private fun resolveVirtualPreviewLongPressLayerAlternates(
 }
 
 private fun buildVirtualPreviewAltLabels(context: Context): Map<Int, String> =
-    KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)
+    AltModifierMappingResolver.resolve(context.assets, context)
         .filterKeys { it in VIRTUAL_PREVIEW_KEY_CODES }
         .filterValues { it.isNotBlank() }
 

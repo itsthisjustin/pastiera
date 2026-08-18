@@ -544,7 +544,9 @@ class AospKeyboardView @JvmOverloads constructor(
                 return@forEach
             }
             val previewLabel = previewLabelFor(key)
-            val label = previewLabel ?: symPageLabelFor(key) ?: displayLabel(key.spec)
+            val activeSymLabel = symPageLabelFor(key)
+            val layerLabel = previewLabel ?: activeSymLabel
+            val label = layerLabel ?: displayLabel(key.spec)
             textPaint.textSize = when (key.spec.type) {
                 KeyType.SPACE -> sp(12f)
                 KeyType.SYMBOLS -> sp(16f)
@@ -557,7 +559,7 @@ class AospKeyboardView @JvmOverloads constructor(
             textPaint.typeface = if (key.spec.type == KeyType.SPACE) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             textPaint.color = themeOverride?.textAndIcons
                 ?: if (isFunctional(key.spec.type)) Color.rgb(202, 209, 216) else Color.rgb(238, 238, 238)
-            if (previewLabel == null && drawFunctionalIcon(canvas, key)) {
+            if (layerLabel == null && drawFunctionalIcon(canvas, key)) {
                 return@forEach
             }
             val baselineOffset = -(textPaint.ascent() + textPaint.descent()) / 2f
@@ -632,7 +634,7 @@ class AospKeyboardView @JvmOverloads constructor(
                 key?.let {
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     listener?.onKeyPressSound(soundKeyCodeFor(it))
-                    if (it.spec.type.isHoldModifier()) {
+                    if (it.spec.type.isHoldModifier() && !hasSymLayerOutput(it)) {
                         heldModifierKey = it
                         heldModifierPointerId = event.getPointerId(pointerIndex)
                         listener?.onModifierKeyDown(soundKeyCodeFor(it))
@@ -649,7 +651,7 @@ class AospKeyboardView @JvmOverloads constructor(
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val pointerIndex = event.actionIndex
                 val key = findKey(event.getX(pointerIndex), event.getY(pointerIndex)) ?: return true
-                if (key.spec.type.isHoldModifier()) return true
+                if (key.spec.type.isHoldModifier() && !hasSymLayerOutput(key)) return true
                 if (heldModifierKey == null) {
                     val previousKey = pressedKey
                     if (
@@ -1246,7 +1248,9 @@ class AospKeyboardView @JvmOverloads constructor(
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         val keyCode = soundKeyCodeFor(key)
         listener?.onKeyPressSound(keyCode)
-        if (key.spec.type.isHoldModifier()) {
+        if (symPageLabelFor(key) != null) {
+            dispatchKey(key)
+        } else if (key.spec.type.isHoldModifier()) {
             listener?.onModifierKeyDown(keyCode)
             listener?.onModifierKeyUp(keyCode)
         } else {
@@ -1303,9 +1307,8 @@ class AospKeyboardView @JvmOverloads constructor(
     private fun symPageLabelFor(key: Key): String? {
         if (!symPageActive) return null
         if (heldModifierKey?.spec?.type == KeyType.CTRL || ctrlPreviewActive) return null
-        if (key.spec.type !in listOf(KeyType.CHAR, KeyType.COMMA, KeyType.PERIOD)) return null
         symPageTextLabels[key.spec.output]?.takeIf { it.isNotBlank() }?.let { return it }
-        return symPageLabels[soundKeyCodeFor(key)]?.takeIf { it.isNotBlank() }
+        return symPageLabels[modifierPreviewKeyCodeFor(key)]?.takeIf { it.isNotBlank() }
     }
 
     private fun previewTextSize(label: String, rect: RectF): Float {
@@ -1324,20 +1327,17 @@ class AospKeyboardView @JvmOverloads constructor(
     }
 
     private fun dispatchKey(key: Key) {
+        if (dispatchSymLayerTextIfNeeded(key)) {
+            return
+        }
         when (key.spec.type) {
             KeyType.CHAR -> {
-                if (dispatchSymPageTextIfNeeded(key)) {
-                    return
-                }
                 val text = if (shifted && key.spec.output == "'") "?" else if (shifted) key.spec.output.uppercase(Locale.ROOT) else key.spec.output
                 if (listener?.onKeyStroke(soundKeyCodeFor(key), text) != true) {
                     listener?.onText(text)
                 }
             }
             KeyType.COMMA, KeyType.PERIOD, KeyType.SPACE -> {
-                if (dispatchSymPageTextIfNeeded(key)) {
-                    return
-                }
                 if (listener?.onKeyStroke(soundKeyCodeFor(key), key.spec.output) != true) {
                     listener?.onText(key.spec.output)
                 }
@@ -1354,12 +1354,23 @@ class AospKeyboardView @JvmOverloads constructor(
         }
     }
 
-    private fun dispatchSymPageTextIfNeeded(key: Key): Boolean {
-        if (!symPageActive) {
-            return false
-        }
-        val text = symPageLabelFor(key) ?: return false
+    private fun dispatchSymLayerTextIfNeeded(key: Key): Boolean {
+        val heldType = heldModifierKey?.spec?.type
+        val text = when {
+            heldType == KeyType.SYMBOLS && !symPageActive -> previewLabelFor(key)
+            symPageActive -> symPageLabelFor(key)
+            else -> null
+        } ?: return false
         return listener?.onSymbolText(text) == true
+    }
+
+    private fun hasSymLayerOutput(key: Key): Boolean {
+        val heldType = heldModifierKey?.spec?.type
+        return when {
+            heldType == KeyType.SYMBOLS && !symPageActive -> previewLabelFor(key) != null
+            symPageActive -> symPageLabelFor(key) != null
+            else -> false
+        }
     }
 
     private fun releaseHeldModifier() {

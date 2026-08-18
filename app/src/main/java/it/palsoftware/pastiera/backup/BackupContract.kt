@@ -261,6 +261,9 @@ object PreferenceSchemas {
             "restore_sym_page" to PreferenceValueType.INT,
             "pending_restore_sym_page" to PreferenceValueType.INT,
             "sym_pages_config" to PreferenceValueType.STRING,
+            "alt_modifier_binding" to PreferenceValueType.STRING,
+            // Accepted so backups from releases before the Device-SYM terminology migration restore cleanly.
+            "alt_character_layer_binding" to PreferenceValueType.STRING,
             "sym_auto_close" to PreferenceValueType.BOOLEAN,
             "emoji_picker_expanded_height" to PreferenceValueType.BOOLEAN,
             "dismissed_releases" to PreferenceValueType.STRING,

@@ -12,15 +12,17 @@ import android.view.inputmethod.InputConnection
 import it.palsoftware.pastiera.SettingsManager
 import it.palsoftware.pastiera.data.layout.LayoutMappingRepository
 import it.palsoftware.pastiera.data.mappings.KeyMappingLoader
+import it.palsoftware.pastiera.data.mappings.AltModifierMappingResolver
+import it.palsoftware.pastiera.data.mappings.DeviceSymMappingRepository
 import it.palsoftware.pastiera.data.variation.VariationRepository
 import it.palsoftware.pastiera.core.AutoSpaceTracker
 import it.palsoftware.pastiera.core.DeferredPunctuationSpaceTracker
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Manages Alt/SYM mappings, long press handling and special character insertion.
+ * Coordinates modifier-bound and SYM character mappings, long presses, and character insertion.
  */
-class AltSymManager(
+class AlternateCharacterManager(
     private val assets: AssetManager,
     private val prefs: SharedPreferences,
     private val context: Context? = null,
@@ -34,7 +36,7 @@ class AltSymManager(
     var onBoundaryTextRequested: ((String, InputConnection) -> Boolean)? = null
 
     companion object {
-        private const val TAG = "AltSymManager"
+        private const val TAG = "AlternateCharacterManager"
     }
 
     private fun autoSpacePunctuation(): String {
@@ -56,8 +58,8 @@ class AltSymManager(
 
     private val handler = Handler(Looper.getMainLooper())
 
-    private val altKeyMap = mutableMapOf<Int, String>()
-    private val deviceSymKeyMap = mutableMapOf<Int, String>()
+    private val altModifierMappings = mutableMapOf<Int, String>()
+    private val deviceSymMappings = mutableMapOf<Int, String>()
     private val symKeyMap = mutableMapOf<Int, String>()
     private val symKeyMap2 = mutableMapOf<Int, String>()
     private val symKeyMapUppercase = mutableMapOf<Int, String>()
@@ -73,8 +75,10 @@ class AltSymManager(
     private var longPressThreshold: Long = 500L
 
     init {
-        altKeyMap.putAll(KeyMappingLoader.loadAltKeyMappings(assets, context))
-        context?.let { deviceSymKeyMap.putAll(KeyMappingLoader.loadDeviceSymKeyMappings(assets, it)) }
+        context?.let {
+            altModifierMappings.putAll(AltModifierMappingResolver.resolve(assets, it))
+            deviceSymMappings.putAll(DeviceSymMappingRepository.load(assets, it))
+        }
         symKeyMap.putAll(KeyMappingLoader.loadSymKeyMappings(assets))
         symKeyMap2.putAll(KeyMappingLoader.loadSymKeyMappingsPage2(assets))
         symKeyMapUppercase.putAll(KeyMappingLoader.loadSymKeyMappingsUppercase(assets))
@@ -86,16 +90,16 @@ class AltSymManager(
         longPressThreshold = prefs.getLong("long_press_threshold", 500L).coerceIn(50L, 1000L)
     }
 
-    fun reloadAltMappings() {
-        altKeyMap.clear()
-        altKeyMap.putAll(KeyMappingLoader.loadAltKeyMappings(assets, context))
-        deviceSymKeyMap.clear()
-        context?.let { deviceSymKeyMap.putAll(KeyMappingLoader.loadDeviceSymKeyMappings(assets, it)) }
+    fun reloadModifierAndDeviceSymMappings() {
+        altModifierMappings.clear()
+        context?.let { altModifierMappings.putAll(AltModifierMappingResolver.resolve(assets, it)) }
+        deviceSymMappings.clear()
+        context?.let { deviceSymMappings.putAll(DeviceSymMappingRepository.load(assets, it)) }
     }
 
-    fun getAltMappings(): Map<Int, String> = altKeyMap
+    fun getAltModifierMappings(): Map<Int, String> = altModifierMappings
 
-    fun getDeviceSymMappings(): Map<Int, String> = deviceSymKeyMap
+    fun getDeviceSymMappings(): Map<Int, String> = deviceSymMappings
 
     fun getSymMappings(): Map<Int, String> = symKeyMap
     
@@ -149,7 +153,7 @@ class AltSymManager(
         }
     }
 
-    fun hasAltMapping(keyCode: Int): Boolean = altKeyMap.containsKey(keyCode)
+    fun hasAltMapping(keyCode: Int): Boolean = altModifierMappings.containsKey(keyCode)
 
     fun hasSymLongPressMapping(keyCode: Int, shiftPressed: Boolean): Boolean {
         val page = context?.let(SettingsManager::resolveLongPressSymPage) ?: 1
@@ -171,11 +175,11 @@ class AltSymManager(
     fun hasPendingPress(keyCode: Int): Boolean = pressedKeys.containsKey(keyCode)
 
     fun addAltKeyMapping(keyCode: Int, character: String) {
-        altKeyMap[keyCode] = character
+        altModifierMappings[keyCode] = character
     }
 
     fun removeAltKeyMapping(keyCode: Int) {
-        altKeyMap.remove(keyCode)
+        altModifierMappings.remove(keyCode)
     }
 
     fun resetTransientState() {
@@ -301,7 +305,7 @@ class AltSymManager(
                 shiftPressed = keyPressWasShifted[keyCode] == true
             )
             "shift" -> LayoutMappingRepository.isMapped(keyCode) && normalChar.isNotEmpty()
-            else -> altKeyMap.containsKey(keyCode)
+            else -> altModifierMappings.containsKey(keyCode)
         }
         
         if (shouldScheduleLongPress) {
@@ -318,7 +322,7 @@ class AltSymManager(
         mappingsOverride: Map<Int, String>? = null,
         defaultHandler: (Int, KeyEvent?) -> Boolean
     ): Boolean {
-        val altChar = (mappingsOverride ?: altKeyMap)[keyCode]
+        val altChar = (mappingsOverride ?: altModifierMappings)[keyCode]
         return if (altChar != null) {
             if (handleBoundaryTextBeforeCommit(altChar, inputConnection)) {
                 altChar.firstOrNull()?.let { onAltCharInserted?.invoke(it) }
@@ -559,7 +563,7 @@ class AltSymManager(
 
                     else -> {
                         // Long press with Alt: use existing Alt mapping (default).
-                        val altChar = altKeyMap[keyCode]
+                        val altChar = altModifierMappings[keyCode]
 
                         if (altChar != null) {
                             longPressActivated[keyCode] = true

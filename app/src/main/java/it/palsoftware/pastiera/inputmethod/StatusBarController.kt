@@ -30,6 +30,7 @@ import it.palsoftware.pastiera.SettingsManager
 import it.palsoftware.pastiera.SymPagesConfig
 import it.palsoftware.pastiera.data.layout.LayoutFileStore
 import it.palsoftware.pastiera.data.mappings.KeyMappingLoader
+import it.palsoftware.pastiera.data.mappings.AltModifierMappingResolver
 import it.palsoftware.pastiera.data.variation.VariationRepository
 import kotlin.math.max
 import android.view.KeyEvent
@@ -277,7 +278,7 @@ class StatusBarController(
         val isEmailField: Boolean = false,
         // UI latch flags for static variation bar layers.
         val shiftLayerLatched: Boolean = false,
-        val altLayerLatched: Boolean = false,
+        val altModifierLayerLatched: Boolean = false,
         val activeKeyboardLayoutName: String = "qwerty",
         val softwareSymPreviewLabels: Map<Int, String> = emptyMap(),
         val softwareSymPreviewTextLabels: Map<String, String> = emptyMap(),
@@ -1473,17 +1474,18 @@ class StatusBarController(
         keyboardView.altPressed = snapshot.altPhysicallyPressed
         keyboardView.altPreviewActive = snapshot.softwareAltPreviewActive
         keyboardView.symPageActive = snapshot.symPage in listOf(1, 2, 5)
-        keyboardView.symPageLabels = if (snapshot.symPage in listOf(1, 2, 5) && symMappings != null) symMappings else emptyMap()
-        keyboardView.symPageTextLabels = if (snapshot.symPage in listOf(1, 2, 5) && symMappings != null) {
-            SoftwareKeyboardSymLabels.buildContentByChar(
+        val activeSymProjection = if (snapshot.symPage in listOf(1, 2, 5) && symMappings != null) {
+            SoftwareKeyboardSymLabels.project(
                 page = snapshot.symPage,
                 rows = SoftwareKeyboardLayoutTemplates.rowTemplateFor(layoutName, softwareKeyboardLayoutStyle()),
                 symMappings = symMappings,
                 layoutName = layoutName
-            ).mapKeys { (char, _) -> char.toString() }
+            )
         } else {
-            emptyMap()
+            SoftwareKeyboardSymLabels.Projection(emptyMap(), emptyMap())
         }
+        keyboardView.symPageLabels = activeSymProjection.contentByKeyCode
+        keyboardView.symPageTextLabels = activeSymProjection.contentByBaseText
         keyboardView.symPreviewLabels = snapshot.softwareSymPreviewLabels
         keyboardView.symPreviewTextLabels = snapshot.softwareSymPreviewTextLabels
         keyboardView.ctrlPreviewLabels = snapshot.softwareCtrlPreviewLabels
@@ -1585,7 +1587,7 @@ class StatusBarController(
             resolveSoftwareKeyboardLayoutName(snapshot)
         ) ?: return emptyList()
         return when (SettingsManager.getLongPressModifier(context)) {
-            "alt" -> KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)[keyCode]?.let(::listOf).orEmpty()
+            "alt" -> AltModifierMappingResolver.resolve(context.assets, context)[keyCode]?.let(::listOf).orEmpty()
             "shift" -> listOf(output.uppercase()).filter { it != output }
             "sym", "sym_symbols", "sym_emoji" -> {
                 val map = softwareKeyboardLongPressSymMappings(SettingsManager.resolveLongPressSymPage(context))
@@ -1609,7 +1611,7 @@ class StatusBarController(
             output.first(),
             resolveSoftwareKeyboardLayoutName(snapshot)
         ) ?: return null
-        return KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)[keyCode]
+        return AltModifierMappingResolver.resolve(context.assets, context)[keyCode]
     }
 
     private fun resolveSoftwareKeyboardLongPressLayerAlternates(
@@ -1624,7 +1626,7 @@ class StatusBarController(
             resolveSoftwareKeyboardLayoutName(snapshot)
         ) ?: return emptyList()
         val alternatives = mutableListOf<AospKeyboardView.LongPressLayerAlternative>()
-        KeyMappingLoader.loadVirtualAltKeyMappings(context.assets, context)[keyCode]?.takeIf { it.isNotBlank() }?.let { alt ->
+        AltModifierMappingResolver.resolve(context.assets, context)[keyCode]?.takeIf { it.isNotBlank() }?.let { alt ->
             alternatives += AospKeyboardView.LongPressLayerAlternative(label = alt, output = alt)
         }
         SettingsManager.getSymPagesConfig(context)

@@ -58,7 +58,7 @@ fun ModifierSettingsScreen(
     val context = LocalContext.current
     var longPressModifier by remember { mutableStateOf(SettingsManager.getLongPressModifier(context)) }
     var longPressThreshold by remember { mutableStateOf(SettingsManager.getLongPressThreshold(context)) }
-    var altBinding by remember { mutableStateOf(SettingsManager.getAltCharacterLayerBinding(context)) }
+    var altBinding by remember { mutableStateOf(SettingsManager.getAltModifierBinding(context)) }
     var shiftTapLatches by remember { mutableStateOf(SettingsManager.getShiftTapLatches(context)) }
     var altTapLatches by remember { mutableStateOf(SettingsManager.getAltTapLatches(context)) }
     var altLatchStaysOnSpace by remember { mutableStateOf(SettingsManager.getAltLatchStaysOnSpace(context)) }
@@ -78,19 +78,19 @@ fun ModifierSettingsScreen(
         "sym_emoji" to stringResource(R.string.long_press_modifier_sym_emoji)
     )
     val altBindingOptions = listOf(
-        "device:auto" to stringResource(R.string.alt_binding_current_device),
-        "first" to stringResource(R.string.alt_binding_first_key_layer),
-        "emoji" to stringResource(R.string.sym_cycle_emoji_layer),
-        "symbols" to stringResource(R.string.sym_cycle_symbols_layer),
-        "device:key2" to stringResource(R.string.keyboard_profile_option_key2),
-        "device:Q25" to stringResource(R.string.keyboard_profile_option_q25),
-        "device:titan" to stringResource(R.string.keyboard_profile_option_titan),
-        "device:titan2" to stringResource(R.string.keyboard_profile_option_titan2),
-        "device:titan2elite_qwerty" to stringResource(R.string.keyboard_profile_option_titan2elite_qwerty),
-        "device:mp01" to stringResource(R.string.keyboard_profile_option_mp01),
-        "device:clicks_razr" to stringResource(R.string.keyboard_profile_option_clicks_razr),
-        "device:clicks_pixel" to stringResource(R.string.keyboard_profile_option_clicks_pixel),
-        "device:clicks_power" to stringResource(R.string.clicks_power_keyboard_title)
+        AltModifierBinding.DeviceSym to stringResource(R.string.alt_binding_current_device),
+        AltModifierBinding.FirstEnabledSymKeyLayer to stringResource(R.string.alt_binding_first_key_layer),
+        AltModifierBinding.Emoji to stringResource(R.string.sym_cycle_emoji_layer),
+        AltModifierBinding.Symbols to stringResource(R.string.sym_cycle_symbols_layer),
+        AltModifierBinding.DeviceSymProfile("key2") to stringResource(R.string.keyboard_profile_option_key2),
+        AltModifierBinding.DeviceSymProfile("Q25") to stringResource(R.string.keyboard_profile_option_q25),
+        AltModifierBinding.DeviceSymProfile("titan") to stringResource(R.string.keyboard_profile_option_titan),
+        AltModifierBinding.DeviceSymProfile("titan2") to stringResource(R.string.keyboard_profile_option_titan2),
+        AltModifierBinding.DeviceSymProfile("titan2elite_qwerty") to stringResource(R.string.keyboard_profile_option_titan2elite_qwerty),
+        AltModifierBinding.DeviceSymProfile("mp01") to stringResource(R.string.keyboard_profile_option_mp01),
+        AltModifierBinding.DeviceSymProfile("clicks_razr") to stringResource(R.string.keyboard_profile_option_clicks_razr),
+        AltModifierBinding.DeviceSymProfile("clicks_pixel") to stringResource(R.string.keyboard_profile_option_clicks_pixel),
+        AltModifierBinding.DeviceSymProfile("clicks_power") to stringResource(R.string.clicks_power_keyboard_title)
     )
 
     BackHandler { onBack() }
@@ -179,7 +179,7 @@ fun ModifierSettingsScreen(
                 onInfoClick = { showSymShortcutCompatibilityInfo = true }
             )
 
-            SettingsSectionDivider(stringResource(R.string.modifiers_section_alt_layer))
+            SettingsSectionDivider(stringResource(R.string.modifiers_section_alt_modifier))
             ModifierDropdownRow(
                 title = stringResource(R.string.alt_binding_title),
                 description = stringResource(R.string.alt_binding_description),
@@ -191,7 +191,7 @@ fun ModifierSettingsScreen(
                 options = altBindingOptions,
                 onSelected = { value ->
                     altBinding = value
-                    SettingsManager.setAltCharacterLayerBinding(context, value)
+                    SettingsManager.setAltModifierBinding(context, value)
                     altBindingExpanded = false
                 }
             )
@@ -369,14 +369,14 @@ private fun ModifierNavigationRow(
 }
 
 @Composable
-private fun ModifierDropdownRow(
+private fun <T> ModifierDropdownRow(
     title: String,
     value: String,
     expanded: Boolean,
     onExpand: () -> Unit,
     onDismiss: () -> Unit,
-    options: List<Pair<String, String>>,
-    onSelected: (String) -> Unit,
+    options: List<Pair<T, String>>,
+    onSelected: (T) -> Unit,
     description: String? = null
 ) {
     Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onExpand)) {

@@ -276,7 +276,7 @@ class InputEventRouter(
     data class EditableFieldKeyDownControllers(
         val modifierStateController: ModifierStateController,
         val symLayoutController: SymLayoutController,
-        val altSymManager: AltSymManager,
+        val alternateCharacterManager: AlternateCharacterManager,
         val variationStateController: VariationStateController,
         val textInputController: TextInputController
     )
@@ -425,7 +425,7 @@ class InputEventRouter(
             }
         }
 
-        if (controllers.altSymManager.hasPendingPress(keyCode)) {
+        if (controllers.alternateCharacterManager.hasPendingPress(keyCode)) {
             return EditableFieldRoutingResult.Consume
         }
 
@@ -457,7 +457,7 @@ class InputEventRouter(
                 event = event,
                 inputConnection = ic,
                 isNumericField = params.isNumericField,
-                altSymManager = controllers.altSymManager,
+                alternateCharacterManager = controllers.alternateCharacterManager,
                 symLayoutController = controllers.symLayoutController,
                 ctrlLatchActive = params.ctrlLatchActive,
                 ctrlPressed = params.ctrlPressed,
@@ -476,7 +476,7 @@ class InputEventRouter(
         }
 
         if (!passThroughAltBoundary && (event?.isAltPressed == true || altLatchActive || altOneShotActive)) {
-            controllers.altSymManager.cancelPendingLongPress(keyCode)
+            controllers.alternateCharacterManager.cancelPendingLongPress(keyCode)
             if (altOneShotActive) {
                 callbacks.clearAltOneShot()
                 callbacks.refreshStatusBar()
@@ -492,7 +492,7 @@ class InputEventRouter(
                     keyCode = keyCode,
                     event = event,
                     inputConnection = ic,
-                    altSymManager = controllers.altSymManager,
+                    alternateCharacterManager = controllers.alternateCharacterManager,
                     altMappingsOverride = params.altMappingsOverride,
                     updateStatusBar = callbacks.updateStatusBar,
                     callSuperWithKey = callbacks.callSuperWithKey
@@ -555,11 +555,11 @@ class InputEventRouter(
         val hasLongPressSupport = when (longPressMode) {
             "shift" -> !longPressSuppressed && event != null && event.unicodeChar != 0 && event.unicodeChar.toChar().isLetter()
             "variations" -> !longPressSuppressed && charForLongPress != null && controllers.variationStateController.hasVariationsFor(charForLongPress)
-            "sym", "sym_symbols", "sym_emoji" -> !longPressSuppressed && controllers.altSymManager.hasSymLongPressMapping(
+            "sym", "sym_symbols", "sym_emoji" -> !longPressSuppressed && controllers.alternateCharacterManager.hasSymLongPressMapping(
                 keyCode = keyCode,
                 shiftPressed = effectiveShiftForLongPress
             )
-            else -> !longPressSuppressed && controllers.altSymManager.hasAltMapping(keyCode)
+            else -> !longPressSuppressed && controllers.alternateCharacterManager.hasAltMapping(keyCode)
         }
 
         if (
@@ -658,7 +658,7 @@ class InputEventRouter(
                 effectiveShiftForLongPress
             )
             if (ic != null) {
-                controllers.altSymManager.handleKeyWithAltMapping(
+                controllers.alternateCharacterManager.handleKeyWithAltMapping(
                     keyCode,
                     event,
                     params.capsLockEnabled,
@@ -1164,7 +1164,7 @@ class InputEventRouter(
         event: KeyEvent?,
         inputConnection: InputConnection?,
         isNumericField: Boolean,
-        altSymManager: AltSymManager,
+        alternateCharacterManager: AlternateCharacterManager,
         symLayoutController: SymLayoutController,
         ctrlLatchActive: Boolean,
         ctrlPressed: Boolean,
@@ -1190,7 +1190,7 @@ class InputEventRouter(
                 ctrlPhysicallyPressed ||
                 ctrlLatchFromNavMode
             if (!isCtrlActive) {
-                val altChar = (altMappingsOverride ?: altSymManager.getAltMappings())[keyCode]
+                val altChar = (altMappingsOverride ?: alternateCharacterManager.getAltModifierMappings())[keyCode]
                 if (altChar != null) {
                     val dpadKeyCode = deviceLayerDpadKeyCode(altChar)
                     if (dpadKeyCode != null) {
@@ -1239,7 +1239,7 @@ class InputEventRouter(
         keyCode: Int,
         event: KeyEvent?,
         inputConnection: InputConnection?,
-        altSymManager: AltSymManager,
+        alternateCharacterManager: AlternateCharacterManager,
         altMappingsOverride: Map<Int, String>? = null,
         updateStatusBar: () -> Unit,
         callSuperWithKey: (Int, KeyEvent?) -> Boolean
@@ -1253,15 +1253,15 @@ class InputEventRouter(
             return true
         }
 
-        val deviceLayerValue = (altMappingsOverride ?: altSymManager.getAltMappings())[keyCode]
-        val deviceLayerDpad = deviceLayerDpadKeyCode(deviceLayerValue)
-        if (deviceLayerDpad != null) {
-            sendModifiedKeyEvent(ic, deviceLayerDpad, ctrl = false, shift = false)
+        val altBindingValue = (altMappingsOverride ?: alternateCharacterManager.getAltModifierMappings())[keyCode]
+        val mappedDpad = deviceLayerDpadKeyCode(altBindingValue)
+        if (mappedDpad != null) {
+            sendModifiedKeyEvent(ic, mappedDpad, ctrl = false, shift = false)
             updateStatusBar()
             return true
         }
 
-        val result = altSymManager.handleAltCombination(
+        val result = alternateCharacterManager.handleAltCombination(
             keyCode,
             ic,
             event,

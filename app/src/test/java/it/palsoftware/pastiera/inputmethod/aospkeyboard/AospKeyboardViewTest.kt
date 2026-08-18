@@ -33,6 +33,7 @@ class AospKeyboardViewTest {
         var cursorDelta = 0
         var backspaceCount = 0
         var enterCount = 0
+        var ctrlCount = 0
         val soundKeyCodes = mutableListOf<Int>()
         val symbolLongPressKeyCodes = mutableListOf<Int>()
         val symbolTexts = mutableListOf<String>()
@@ -44,7 +45,7 @@ class AospKeyboardViewTest {
         override fun onEnter() { enterCount++ }
         override fun onShift() { shiftCount++ }
         override fun onSymbols() { symbolCount++ }
-        override fun onCtrl() = Unit
+        override fun onCtrl() { ctrlCount++ }
         override fun onLanguageSwitch() { languageSwitchCount++ }
         override fun onCursorMove(delta: Int) { cursorDelta += delta }
         override fun onKeyPressSound(keyCode: Int) { soundKeyCodes += keyCode }
@@ -106,7 +107,7 @@ class AospKeyboardViewTest {
     }
 
     @Test
-    fun accessibilitySemanticsTrackShiftCtrlSymAndAltLayersWithoutChangingId() {
+    fun accessibilitySemanticsTrackModifierAndSymStatesWithoutChangingId() {
         val view = measuredKeyboard()
         val eId = accessibilityVirtualId(view, "pastiera_key_e")
 
@@ -324,6 +325,61 @@ class AospKeyboardViewTest {
 
         assertEquals(listOf("🙃"), listener.symbolTexts)
         assertEquals(emptyList<String>(), listener.texts)
+    }
+
+    @Test
+    fun activeSymPage_replacesCtrlSlotWithTappableZero() {
+        val listener = RecordingListener()
+        val view = measuredKeyboard().apply {
+            symPageActive = true
+            symPageLabels = mapOf(KeyEvent.KEYCODE_CTRL_LEFT to "0")
+            this.listener = listener
+        }
+        val (x, y) = centerOfLabel(view, "CTRL")
+
+        assertEquals("0", accessibilitySnapshot(view, "pastiera_key_ctrl").label)
+        view.dispatchTouchEvent(motion(MotionEvent.ACTION_DOWN, x, y, 0L))
+        view.dispatchTouchEvent(motion(MotionEvent.ACTION_UP, x, y, 20L))
+
+        assertEquals(listOf("0"), listener.symbolTexts)
+        assertEquals(0, listener.ctrlCount)
+        assertTrue(view.performAccessibilityClickForResourceName("pastiera_key_ctrl"))
+        assertEquals(listOf("0", "0"), listener.symbolTexts)
+        assertEquals(0, listener.ctrlCount)
+    }
+
+    @Test
+    fun heldSymPreview_replacesCtrlSlotWithTappableZero() {
+        val listener = RecordingListener()
+        val view = measuredKeyboard().apply {
+            symPreviewLabels = mapOf(KeyEvent.KEYCODE_CTRL_LEFT to "0")
+            this.listener = listener
+        }
+        val (symX, symY) = centerOfLabel(view, "SYM")
+        val (ctrlX, ctrlY) = centerOfLabel(view, "CTRL")
+
+        view.dispatchTouchEvent(motion(MotionEvent.ACTION_DOWN, symX, symY, 0L))
+        assertEquals("0", previewLabel(view, keyForLabel(view, "CTRL")))
+        view.dispatchTouchEvent(
+            multiPointerMotion(
+                actionMasked = MotionEvent.ACTION_POINTER_DOWN,
+                actionIndex = 1,
+                coordinates = listOf(symX to symY, ctrlX to ctrlY),
+                offsetMs = 10L
+            )
+        )
+        view.dispatchTouchEvent(
+            multiPointerMotion(
+                actionMasked = MotionEvent.ACTION_POINTER_UP,
+                actionIndex = 1,
+                coordinates = listOf(symX to symY, ctrlX to ctrlY),
+                offsetMs = 20L
+            )
+        )
+        view.dispatchTouchEvent(motion(MotionEvent.ACTION_UP, symX, symY, 30L))
+
+        assertEquals(listOf("0"), listener.symbolTexts)
+        assertEquals(0, listener.ctrlCount)
     }
 
     @Test

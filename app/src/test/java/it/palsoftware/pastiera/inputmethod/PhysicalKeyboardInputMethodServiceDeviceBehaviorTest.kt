@@ -151,15 +151,15 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
         val t0 = 2_000L
 
         tapAlt(t0)          // one-shot
-        tapAlt(t0 + 120L)   // latch (+ visual altLayerLatched on quick double tap)
+        tapAlt(t0 + 120L)   // latch (+ visual altModifierLayerLatched on quick double tap)
         tapAlt(t0 + 240L)   // user expects off; device reports still active
 
         val modifier = modifierController()
-        val altLayerLatched = getField<Boolean>(service, "altLayerLatched")
+        val altModifierLayerLatched = getField<Boolean>(service, "altModifierLayerLatched")
 
         assertFalse(modifier.altOneShot)
         assertFalse(modifier.altLatchActive)
-        assertFalse(altLayerLatched)
+        assertFalse(altModifierLayerLatched)
     }
 
     @Test
@@ -574,7 +574,7 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
     }
 
     @Test
-    fun deviceSanity_symATogglesEmojiThenSymbols_exactMappings() {
+    fun deviceSanity_symACyclesDeviceThenEmojiThenSymbols_exactMappings() {
         val t0 = 4_000L
 
         tapSym(t0)
@@ -582,13 +582,22 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
             KeyEvent.KEYCODE_A,
             keyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A, t0 + 20L, t0 + 20L)
         )
-        assertTrue("commits=${recorder.committedTexts}", recorder.committedTexts.contains("😢"))
+        assertTrue("commits=${recorder.committedTexts}", recorder.committedTexts.contains("@"))
 
-        tapSym(t0 + 200L) // re-open SYM (emoji page)
-        tapSym(t0 + 260L) // next page -> symbols
+        tapSym(t0 + 200L) // re-open SYM (Device SYM)
+        tapSym(t0 + 260L) // next page -> emoji
         service.onKeyDown(
             KeyEvent.KEYCODE_A,
             keyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A, t0 + 300L, t0 + 300L)
+        )
+        assertTrue("commits=${recorder.committedTexts}", recorder.committedTexts.contains("😢"))
+
+        tapSym(t0 + 400L) // re-open SYM (Device SYM)
+        tapSym(t0 + 460L) // next page -> emoji
+        tapSym(t0 + 520L) // next page -> symbols
+        service.onKeyDown(
+            KeyEvent.KEYCODE_A,
+            keyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A, t0 + 560L, t0 + 560L)
         )
         assertTrue("commits=${recorder.committedTexts}", recorder.committedTexts.contains("="))
     }

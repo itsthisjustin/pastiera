@@ -129,7 +129,8 @@ object SettingsManager {
     private const val KEY_RESTORE_SYM_PAGE = "restore_sym_page" // SYM page to restore when returning from settings
     private const val KEY_PENDING_RESTORE_SYM_PAGE = "pending_restore_sym_page" // Temporary SYM page state saved when opening settings
     private const val KEY_SYM_PAGES_CONFIG = "sym_pages_config" // Order/enabled pages for SYM
-    const val KEY_ALT_CHARACTER_LAYER_BINDING = "alt_character_layer_binding"
+    const val KEY_ALT_MODIFIER_BINDING = "alt_modifier_binding"
+    internal const val LEGACY_KEY_ALT_CHARACTER_LAYER_BINDING = "alt_character_layer_binding"
     private const val KEY_SYM_AUTO_CLOSE = "sym_auto_close" // Auto-close SYM layout after key press
     private const val KEY_SYM_AUTO_CLOSE_ON_TOUCH = "sym_auto_close_on_touch" // Auto-close SYM layout after tapping on-screen SYM keys
     private const val KEY_SHIFT_TAP_LATCHES = "shift_tap_latches"
@@ -377,6 +378,7 @@ object SettingsManager {
     private const val DEFAULT_OVERLAPPING_KEYS_ENABLED = false
     private const val DEFAULT_EMOJI_PICKER_EXPANDED_HEIGHT = true
     private val DEFAULT_SYM_PAGES_CONFIG = SymPagesConfig()
+    private const val SYM_PAGES_SCHEMA_VERSION = 2
     private const val DEFAULT_STATIC_VARIATION_BAR_MODE = false
     private const val DEFAULT_STATIC_VARIATION_BAR_BASE_LAYER_ENABLED = false
     private const val DEFAULT_EXPERIMENTAL_SUGGESTIONS_ENABLED = true
@@ -4870,6 +4872,7 @@ object SettingsManager {
 
         return try {
             val jsonObject = JSONObject(jsonString)
+            val schemaVersion = jsonObject.optInt("schemaVersion", 1)
             val deviceEnabled = jsonObject.optBoolean("deviceEnabled", false)
             val emojiEnabled = jsonObject.optBoolean("emojiEnabled", true)
             val symbolsEnabled = jsonObject.optBoolean("symbolsEnabled", true)
@@ -4902,7 +4905,7 @@ object SettingsManager {
                 cyclePages + SymPagesConfig.PAGE_EMOJI_PICKER
             }
 
-            SymPagesConfig(
+            val parsedConfig = SymPagesConfig(
                 deviceEnabled = deviceEnabled,
                 emojiEnabled = emojiEnabled,
                 symbolsEnabled = symbolsEnabled,
@@ -4910,6 +4913,15 @@ object SettingsManager {
                 emojiPickerEnabled = emojiPickerEnabled,
                 symPageOrder = parsedOrder
             )
+            val migratedConfig = if (schemaVersion < SYM_PAGES_SCHEMA_VERSION && parsedConfig.isLegacyDefault()) {
+                parsedConfig.copy(deviceEnabled = true)
+            } else {
+                parsedConfig
+            }
+            if (schemaVersion < SYM_PAGES_SCHEMA_VERSION) {
+                setSymPagesConfig(context, migratedConfig)
+            }
+            migratedConfig
         } catch (e: Exception) {
             Log.e(TAG, "Error loading SYM pages config", e)
             DEFAULT_SYM_PAGES_CONFIG
@@ -4922,6 +4934,7 @@ object SettingsManager {
     fun setSymPagesConfig(context: Context, config: SymPagesConfig) {
         try {
             val jsonObject = JSONObject().apply {
+                put("schemaVersion", SYM_PAGES_SCHEMA_VERSION)
                 put("deviceEnabled", config.deviceEnabled)
                 put("emojiEnabled", config.emojiEnabled)
                 put("symbolsEnabled", config.symbolsEnabled)
@@ -4942,18 +4955,35 @@ object SettingsManager {
         }
     }
 
-    fun getAltCharacterLayerBinding(context: Context): String =
-        getPreferences(context).getString(KEY_ALT_CHARACTER_LAYER_BINDING, "device:auto")
-            ?: "device:auto"
+    private fun SymPagesConfig.isLegacyDefault(): Boolean =
+        !deviceEnabled &&
+            emojiEnabled &&
+            symbolsEnabled &&
+            !clipboardEnabled &&
+            !emojiPickerEnabled &&
+            normalizedOrder() == SymPagesConfig.DEFAULT_ORDER
 
-    fun setAltCharacterLayerBinding(context: Context, binding: String) {
-        val normalized = when {
-            binding == "first" || binding == "emoji" || binding == "symbols" -> binding
-            binding.startsWith("device:") -> binding
-            else -> "device:auto"
+    fun getAltModifierBinding(context: Context): AltModifierBinding {
+        val prefs = getPreferences(context)
+        prefs.getString(KEY_ALT_MODIFIER_BINDING, null)?.let {
+            return AltModifierBinding.fromPersistedValue(it)
         }
+
+        val legacyValue = prefs.getString(LEGACY_KEY_ALT_CHARACTER_LAYER_BINDING, null)
+        val binding = AltModifierBinding.fromPersistedValue(legacyValue)
+        if (legacyValue != null) {
+            prefs.edit()
+                .putString(KEY_ALT_MODIFIER_BINDING, binding.persistedValue)
+                .remove(LEGACY_KEY_ALT_CHARACTER_LAYER_BINDING)
+                .apply()
+        }
+        return binding
+    }
+
+    fun setAltModifierBinding(context: Context, binding: AltModifierBinding) {
         getPreferences(context).edit()
-            .putString(KEY_ALT_CHARACTER_LAYER_BINDING, normalized)
+            .putString(KEY_ALT_MODIFIER_BINDING, binding.persistedValue)
+            .remove(LEGACY_KEY_ALT_CHARACTER_LAYER_BINDING)
             .apply()
     }
     

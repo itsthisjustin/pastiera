@@ -26,6 +26,7 @@
     "KEYCODE_B": "?",
     "KEYCODE_N": "!",
     "KEYCODE_M": ",",
-    "KEYCODE_PERIOD": "$"
+    "KEYCODE_PERIOD": "$",
+    "KEYCODE_CTRL_LEFT": "0"
   }
 }

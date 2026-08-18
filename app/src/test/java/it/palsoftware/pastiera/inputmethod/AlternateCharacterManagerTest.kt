@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
-class AltSymManagerTest {
+class AlternateCharacterManagerTest {
 
     private lateinit var context: Context
     private lateinit var prefs: android.content.SharedPreferences
@@ -51,7 +51,7 @@ class AltSymManagerTest {
     fun variationsLongPress_replacesFirstCharacterUsingComposingRegion() {
         val recorder = RecordingInputConnection()
         val inputConnection = recorder.asProxy()
-        val manager = AltSymManager(context.assets, prefs, context)
+        val manager = AlternateCharacterManager(context.assets, prefs, context)
 
         val consumed = manager.handleKeyWithAltMapping(
             keyCode = KeyEvent.KEYCODE_U,
@@ -76,7 +76,7 @@ class AltSymManagerTest {
     fun variationsLongPress_replacesOriginalCharacterAndPreservesLaterInput() {
         val recorder = RecordingInputConnection()
         val inputConnection = recorder.asProxy()
-        val manager = AltSymManager(context.assets, prefs, context)
+        val manager = AlternateCharacterManager(context.assets, prefs, context)
 
         manager.handleKeyWithAltMapping(
             keyCode = KeyEvent.KEYCODE_U,
@@ -100,7 +100,7 @@ class AltSymManagerTest {
     fun variationsLongPress_preservesLaterInputForShiftedCharacter() {
         val recorder = RecordingInputConnection()
         val inputConnection = recorder.asProxy()
-        val manager = AltSymManager(context.assets, prefs, context)
+        val manager = AlternateCharacterManager(context.assets, prefs, context)
 
         manager.handleKeyWithAltMapping(
             keyCode = KeyEvent.KEYCODE_U,
@@ -123,7 +123,7 @@ class AltSymManagerTest {
     fun variationsLongPress_doesNotTouchLaterInputWhenOriginalCharacterChanged() {
         val recorder = RecordingInputConnection()
         val inputConnection = recorder.asProxy()
-        val manager = AltSymManager(context.assets, prefs, context)
+        val manager = AlternateCharacterManager(context.assets, prefs, context)
 
         manager.handleKeyWithAltMapping(
             keyCode = KeyEvent.KEYCODE_U,
@@ -146,7 +146,7 @@ class AltSymManagerTest {
     fun variationsLongPress_withoutAnchorDoesNotReplaceLaterInput() {
         val recorder = RecordingInputConnection(extractedTextAvailable = false)
         val inputConnection = recorder.asProxy()
-        val manager = AltSymManager(context.assets, prefs, context)
+        val manager = AlternateCharacterManager(context.assets, prefs, context)
 
         manager.handleKeyWithAltMapping(
             keyCode = KeyEvent.KEYCODE_U,
@@ -171,7 +171,7 @@ class AltSymManagerTest {
         val inputConnection = recorder.asProxy()
         inputConnection.commitText("teh", 1)
         val requested = mutableListOf<String>()
-        val manager = AltSymManager(context.assets, prefs, context).apply {
+        val manager = AlternateCharacterManager(context.assets, prefs, context).apply {
             onBoundaryTextRequested = { text, connection ->
                 requested += text
                 connection.commitText("?", 1)
@@ -198,7 +198,7 @@ class AltSymManagerTest {
         val inputConnection = recorder.asProxy()
         inputConnection.commitText("l", 1)
         val requested = mutableListOf<String>()
-        val manager = AltSymManager(context.assets, prefs, context).apply {
+        val manager = AlternateCharacterManager(context.assets, prefs, context).apply {
             onBoundaryTextRequested = { text, _ ->
                 requested += text
                 true
