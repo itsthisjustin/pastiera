@@ -985,6 +985,19 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="installed_dictionaries_uninstall_cannot_delete_asset">Integrierte Wörterbücher können nicht deinstalliert werden</string>
     <string name="installed_dictionaries_uninstall_failed">Deinstallation fehlgeschlagen</string>
     <string name="trackpad_gestures_title">Trackpad-Gesten-Vorschläge</string>
+    <string name="trackpad_shizuku_device_title">Shizuku-Eingabegerät</string>
+    <string name="trackpad_shizuku_device_automatic">Automatisch (empfohlen)</string>
+    <string name="trackpad_shizuku_device_unavailable">%1$s (derzeit nicht verfügbar)</string>
+    <string name="trackpad_shizuku_device_discovery_failed">Geräteerkennung fehlgeschlagen. Der automatische Fallback bleibt aktiv.</string>
+    <string name="trackpad_shizuku_device_no_candidate">Kein eindeutig erkanntes Trackpad gefunden. Wähle ein Gerät manuell aus oder behalte den Fallback.</string>
+    <string name="trackpad_debug_title">Trackpad-Diagnose</string>
+    <string name="trackpad_debug_description">Live-Koordinaten, Achsenbereiche und erkannte Drittel prüfen.</string>
+    <string name="trackpad_debug_coordinates_title">Live-Koordinaten</string>
+    <string name="trackpad_debug_show_y_axis">Y-Achse anzeigen</string>
+    <string name="trackpad_debug_range_motion">InputDevice.MotionRange</string>
+    <string name="trackpad_debug_range_display">Display-Fallback</string>
+    <string name="trackpad_debug_axis_value_third">%1$s = %2$.2f · Drittel %3$d</string>
+    <string name="trackpad_debug_axis_value">%1$s = %2$.2f</string>
     <string name="trackpad_gestures_description">Nach oben wischen auf dem Trackpad, um Vorschläge zu akzeptieren</string>
     <string name="trackpad_gestures_enabled_title">Trackpad-Gesten Aktivieren</string>
     <string name="trackpad_gestures_enabled_description">Nach oben wischen auf dem Trackpad, um Wortvorschläge zu akzeptieren</string>

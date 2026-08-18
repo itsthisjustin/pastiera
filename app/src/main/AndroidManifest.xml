@@ -126,7 +126,7 @@
         <activity
             android:name=".TrackpadDebugActivity"
             android:exported="false"
-            android:label="Trackpad Debug"
+            android:label="@string/trackpad_debug_title"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance" />

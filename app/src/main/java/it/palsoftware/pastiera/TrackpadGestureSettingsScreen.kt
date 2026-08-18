@@ -21,6 +21,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import it.palsoftware.pastiera.inputmethod.trackpad.ShizukuTrackpadDeviceDiscovery
+import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadInputDevice
+import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadInputDeviceDiscovery
 import kotlinx.coroutines.delay
 
 /**
@@ -53,6 +56,10 @@ fun TrackpadGestureSettingsScreen(
     var shizukuStatus by remember { mutableStateOf(ShizukuStatus.NotConnected) }
     var trackpadProvider by remember { mutableStateOf(SettingsManager.getTrackpadProvider(context)) }
     var providerMenuExpanded by remember { mutableStateOf(false) }
+    var shizukuDevice by remember { mutableStateOf(SettingsManager.getTrackpadShizukuDevice(context)) }
+    var shizukuDeviceMenuExpanded by remember { mutableStateOf(false) }
+    var shizukuDevices by remember { mutableStateOf<List<TrackpadInputDevice>>(emptyList()) }
+    var shizukuDeviceDiscoveryFailed by remember { mutableStateOf(false) }
     var swipeToDelete by remember { mutableStateOf(SettingsManager.getSwipeToDelete(context)) }
     var swipeToDeleteProvider by remember { mutableStateOf(SettingsManager.getSwipeToDeleteProvider(context)) }
     var swipeToDeleteProviderMenuExpanded by remember { mutableStateOf(false) }
@@ -76,6 +83,22 @@ fun TrackpadGestureSettingsScreen(
         while (true) {
             shizukuStatus = resolveShizukuStatus()
             delay(2000)
+        }
+    }
+    LaunchedEffect(trackpadProvider, shizukuStatus) {
+        if (
+            trackpadProvider == SettingsManager.TRACKPAD_PROVIDER_SHIZUKU &&
+            shizukuStatus == ShizukuStatus.Connected
+        ) {
+            runCatching { ShizukuTrackpadDeviceDiscovery.discover() }
+                .onSuccess { devices ->
+                    shizukuDevices = TrackpadInputDeviceDiscovery.selectableDevices(devices)
+                    shizukuDeviceDiscoveryFailed = false
+                }
+                .onFailure {
+                    shizukuDevices = emptyList()
+                    shizukuDeviceDiscoveryFailed = true
+                }
         }
     }
 
@@ -316,29 +339,112 @@ fun TrackpadGestureSettingsScreen(
             }
 
             if (trackpadProvider == SettingsManager.TRACKPAD_PROVIDER_SHIZUKU) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val (statusIcon, statusTint, statusText) = when (shizukuStatus) {
-                        ShizukuStatus.Connected -> Triple(Icons.Filled.CheckCircle, MaterialTheme.colorScheme.primary, stringResource(R.string.trackpad_gestures_shizuku_connected))
-                        ShizukuStatus.NotAuthorized -> Triple(Icons.Filled.Warning, MaterialTheme.colorScheme.tertiary, stringResource(R.string.trackpad_gestures_shizuku_not_authorized))
-                        ShizukuStatus.NotConnected -> Triple(Icons.Filled.Error, MaterialTheme.colorScheme.error, stringResource(R.string.trackpad_gestures_shizuku_not_connected))
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val (statusIcon, statusTint, statusText) = when (shizukuStatus) {
+                            ShizukuStatus.Connected -> Triple(Icons.Filled.CheckCircle, MaterialTheme.colorScheme.primary, stringResource(R.string.trackpad_gestures_shizuku_connected))
+                            ShizukuStatus.NotAuthorized -> Triple(Icons.Filled.Warning, MaterialTheme.colorScheme.tertiary, stringResource(R.string.trackpad_gestures_shizuku_not_authorized))
+                            ShizukuStatus.NotConnected -> Triple(Icons.Filled.Error, MaterialTheme.colorScheme.error, stringResource(R.string.trackpad_gestures_shizuku_not_connected))
+                        }
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            tint = statusTint,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusTint
+                        )
                     }
-                    Icon(
-                        imageVector = statusIcon,
-                        contentDescription = null,
-                        tint = statusTint,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = statusTint
-                    )
+
+                    val automaticLabel = stringResource(R.string.trackpad_shizuku_device_automatic)
+                    val automaticDevice = TrackpadInputDeviceDiscovery.selectAutomatic(shizukuDevices)
+                    val selectedDeviceLabel = when (shizukuDevice) {
+                        SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO -> automaticDevice?.let {
+                            "$automaticLabel · ${it.displayName}"
+                        } ?: automaticLabel
+                        else -> shizukuDevices.firstOrNull { it.path == shizukuDevice }?.displayName
+                            ?: stringResource(R.string.trackpad_shizuku_device_unavailable, shizukuDevice)
+                    }
+                    val deviceSupportingText: (@Composable () -> Unit)? = when {
+                        shizukuDeviceDiscoveryFailed -> {
+                            { Text(stringResource(R.string.trackpad_shizuku_device_discovery_failed)) }
+                        }
+                        shizukuStatus == ShizukuStatus.Connected &&
+                            shizukuDevice == SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO &&
+                            automaticDevice == null -> {
+                            { Text(stringResource(R.string.trackpad_shizuku_device_no_candidate)) }
+                        }
+                        else -> null
+                    }
+                    ExposedDropdownMenuBox(
+                        expanded = shizukuDeviceMenuExpanded,
+                        onExpandedChange = { shizukuDeviceMenuExpanded = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = selectedDeviceLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            singleLine = true,
+                            enabled = shizukuStatus == ShizukuStatus.Connected ||
+                                shizukuDevice != SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO,
+                            label = { Text(stringResource(R.string.trackpad_shizuku_device_title)) },
+                            supportingText = deviceSupportingText,
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = shizukuDeviceMenuExpanded)
+                            },
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = shizukuDeviceMenuExpanded,
+                            onDismissRequest = { shizukuDeviceMenuExpanded = false }
+                        ) {
+                            val choices = buildList {
+                                add(SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO to automaticLabel)
+                                addAll(shizukuDevices.map { it.path to it.displayName })
+                                if (
+                                    shizukuDevice != SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO &&
+                                    none { it.first == shizukuDevice }
+                                ) {
+                                    add(
+                                        shizukuDevice to context.getString(
+                                            R.string.trackpad_shizuku_device_unavailable,
+                                            shizukuDevice
+                                        )
+                                    )
+                                }
+                            }
+                            choices.forEach { (value, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        shizukuDevice = value
+                                        SettingsManager.setTrackpadShizukuDevice(context, value)
+                                        shizukuDeviceMenuExpanded = false
+                                    },
+                                    leadingIcon = {
+                                        if (shizukuDevice == value) {
+                                            Icon(Icons.Filled.Check, contentDescription = null)
+                                        }
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -490,6 +596,49 @@ fun TrackpadGestureSettingsScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .clickable {
+                        context.startActivity(Intent(context, TrackpadDebugActivity::class.java))
+                    }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.BugReport,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.trackpad_debug_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = stringResource(R.string.trackpad_debug_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2
+                        )
+                    }
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,

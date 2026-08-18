@@ -208,6 +208,30 @@ class SettingsManagerLayoutSwitchTest {
     }
 
     @Test
+    fun trackpadShizukuDevice_defaultsToAutoAndPersistsEventNode() {
+        val context = RuntimeEnvironment.getApplication()
+
+        assertEquals(
+            SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO,
+            SettingsManager.getTrackpadShizukuDevice(context)
+        )
+
+        SettingsManager.setTrackpadShizukuDevice(context, "/dev/input/event6")
+
+        assertEquals(
+            "/dev/input/event6",
+            SettingsManager.getTrackpadShizukuDevice(context)
+        )
+
+        SettingsManager.setTrackpadShizukuDevice(context, "not-an-event-node")
+
+        assertEquals(
+            SettingsManager.TRACKPAD_SHIZUKU_DEVICE_AUTO,
+            SettingsManager.getTrackpadShizukuDevice(context)
+        )
+    }
+
+    @Test
     fun inputStyleSuggestionLocales_persistPerLocaleAndLayout() {
         val context = RuntimeEnvironment.getApplication()
 

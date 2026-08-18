@@ -158,6 +158,7 @@ object SettingsManager {
     private const val KEY_TRACKPAD_SUGGESTION_SWIPE_THRESHOLD = "trackpad_suggestion_swipe_threshold"
     private const val KEY_TRACKPAD_DELETE_SWIPE_THRESHOLD = "trackpad_delete_swipe_threshold"
     private const val KEY_TRACKPAD_PROVIDER = "trackpad_provider" // shizuku | native_ime
+    private const val KEY_TRACKPAD_SHIZUKU_DEVICE = "trackpad_shizuku_device"
     private const val KEY_SHIFT_BACKSPACE_DELETE = "shift_backspace_delete" // Shift + Backspace performs forward delete
     private const val KEY_ALT_BACKSPACE_DELETE = "alt_backspace_delete" // Alt + Backspace performs forward delete
     private const val KEY_BACKSPACE_AT_START_DELETE = "backspace_at_start_delete" // Backspace at line start performs forward delete
@@ -404,6 +405,7 @@ object SettingsManager {
     private const val MAX_TRACKPAD_SWIPE_THRESHOLD = 750f
     const val TRACKPAD_PROVIDER_SHIZUKU = "shizuku"
     const val TRACKPAD_PROVIDER_NATIVE_IME = "native_ime"
+    const val TRACKPAD_SHIZUKU_DEVICE_AUTO = "auto"
     private const val DEFAULT_TRACKPAD_PROVIDER = TRACKPAD_PROVIDER_NATIVE_IME
     private val TRACKPAD_PROVIDER_VALUES = setOf(
         TRACKPAD_PROVIDER_SHIZUKU,
@@ -5277,6 +5279,34 @@ object SettingsManager {
         getPreferences(context).edit()
             .putString(KEY_TRACKPAD_PROVIDER, normalized)
             .commit()
+    }
+
+    fun getTrackpadShizukuDevice(context: Context): String {
+        val value = getPreferences(context)
+            .getString(KEY_TRACKPAD_SHIZUKU_DEVICE, TRACKPAD_SHIZUKU_DEVICE_AUTO)
+            .orEmpty()
+        return if (value == TRACKPAD_SHIZUKU_DEVICE_AUTO || isTrackpadEventNode(value)) {
+            value
+        } else {
+            TRACKPAD_SHIZUKU_DEVICE_AUTO
+        }
+    }
+
+    fun setTrackpadShizukuDevice(context: Context, device: String) {
+        val normalized = if (
+            device == TRACKPAD_SHIZUKU_DEVICE_AUTO || isTrackpadEventNode(device)
+        ) {
+            device
+        } else {
+            TRACKPAD_SHIZUKU_DEVICE_AUTO
+        }
+        getPreferences(context).edit()
+            .putString(KEY_TRACKPAD_SHIZUKU_DEVICE, normalized)
+            .apply()
+    }
+
+    private fun isTrackpadEventNode(value: String): Boolean {
+        return Regex("^/dev/input/event\\d+$").matches(value)
     }
 
     /**

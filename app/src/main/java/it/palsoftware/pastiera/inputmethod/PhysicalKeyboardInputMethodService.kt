@@ -63,6 +63,8 @@ import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils.setAdd
 import it.palsoftware.pastiera.inputmethod.telex.VietnameseTelexProcessor
 import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadEventDeviceResolver
 import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadGestureDetector
+import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadAxisRange
+import it.palsoftware.pastiera.inputmethod.trackpad.TrackpadCoordinateMapper
 import it.palsoftware.pastiera.inputmethod.expansion.ExpansionRuntimeConfig
 import it.palsoftware.pastiera.inputmethod.expansion.ExpansionTriggerKind
 import it.palsoftware.pastiera.inputmethod.expansion.SnippetExpansionSource
@@ -2138,9 +2140,13 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 } else {
                     Log.d(TRACKPAD_DEBUG_TAG, "Detector NOT initialized yet, skipping restart")
                 }
-            } else if (key == "trackpad_provider") {
+            } else if (key == "trackpad_provider" || key == "trackpad_shizuku_device") {
                 val newValue = SettingsManager.getTrackpadProvider(this)
-                Log.d(TRACKPAD_DEBUG_TAG, "SharedPrefs listener: trackpad_provider changed to $newValue")
+                val shizukuDevice = SettingsManager.getTrackpadShizukuDevice(this)
+                Log.d(
+                    TRACKPAD_DEBUG_TAG,
+                    "SharedPrefs listener: trackpad input changed: provider=$newValue, shizukuDevice=$shizukuDevice"
+                )
                 if (::trackpadGestureDetector.isInitialized) {
                     trackpadGestureDetector.stop()
                     trackpadGestureDetector = buildTrackpadGestureDetector()
@@ -2591,17 +2597,19 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     private fun buildTrackpadGestureDetector(): TrackpadGestureDetector {
         val gesturesEnabled = SettingsManager.getTrackpadGesturesEnabled(this)
         val swipeThreshold = SettingsManager.getTrackpadSuggestionSwipeThreshold(this).toInt()
-        val eventDevice = resolveTrackpadEventDevice()
+        val eventDeviceSelection = SettingsManager.getTrackpadShizukuDevice(this)
+        val fallbackEventDevice = resolveTrackpadEventDevice()
         Log.d(
             TRACKPAD_DEBUG_TAG,
-            "buildTrackpadGestureDetector() - gesturesEnabled=$gesturesEnabled, swipeThreshold=$swipeThreshold, eventDevice=$eventDevice"
+            "buildTrackpadGestureDetector() - gesturesEnabled=$gesturesEnabled, swipeThreshold=$swipeThreshold, eventDeviceSelection=$eventDeviceSelection, fallbackEventDevice=$fallbackEventDevice"
         )
         return TrackpadGestureDetector(
             isEnabled = { shouldStartShizukuTrackpadDetector() },
             onSwipeUp = { third -> acceptSuggestionAtIndex(third) },
             scope = trackpadScope,
             swipeUpThreshold = swipeThreshold,
-            eventDevice = eventDevice
+            eventDeviceSelection = eventDeviceSelection,
+            fallbackEventDevice = fallbackEventDevice
         )
     }
 
@@ -5208,9 +5216,11 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                val xRange = nativeImeTrackpadAxisRange(event, MotionEvent.AXIS_X)
                 nativeTrackpadGestureStart = NativeTrackpadGestureStart(
                     x = event.x,
                     y = event.y,
+                    xRange = xRange,
                     origin = origin,
                     actionName = motionActionName(event.actionMasked),
                     deviceId = event.deviceId,
@@ -5244,6 +5254,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 nativeTrackpadGestureStart ?: NativeTrackpadGestureStart(
                     x = event.x,
                     y = event.y,
+                    xRange = nativeImeTrackpadAxisRange(event, MotionEvent.AXIS_X),
                     origin = origin,
                     actionName = motionActionName(event.actionMasked),
                     deviceId = event.deviceId,
@@ -5374,10 +5385,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
 
         when (direction) {
             NativeTrackpadSwipeDirection.UP -> {
-                val third = nativeImeTrackpadThird(start.x)
+                val third = TrackpadCoordinateMapper.third(start.x, start.xRange)
                 Log.d(
                     TRACKPAD_DEBUG_TAG,
-                    "Native swipe accepted[$phase]: direction=UP startX=${start.x}, startY=${start.y}, x=$x, y=$y, dx=$deltaX, dy=$deltaY, duration=${durationMs}ms, velocity=$upVelocity, third=$third"
+                    "Native swipe accepted[$phase]: direction=UP startX=${start.x}, startY=${start.y}, x=$x, y=$y, dx=$deltaX, dy=$deltaY, duration=${durationMs}ms, velocity=$upVelocity, xRange=${start.xRange.min}..${start.xRange.max}, third=$third"
                 )
                 KeyboardEventTracker.notifySyntheticGestureKeyEvent(
                     provider = SettingsManager.TRACKPAD_PROVIDER_NATIVE_IME,
@@ -5436,14 +5447,23 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         return SettingsManager.getTrackpadDeleteSwipeThreshold(this)
     }
 
-    private fun nativeImeTrackpadThird(x: Float): Int {
-        val width = 1440f
-        val clampedX = x.coerceIn(0f, width)
-        return when {
-            clampedX < width / 3f -> 0
-            clampedX < (width * 2f) / 3f -> 1
-            else -> 2
+    private fun nativeImeTrackpadAxisRange(event: MotionEvent, axis: Int): TrackpadAxisRange {
+        val inputDevice = InputDevice.getDevice(event.deviceId)
+        val motionRange = inputDevice?.getMotionRange(axis, event.source)
+            ?: inputDevice?.getMotionRange(axis)
+        val detectedRange = motionRange?.let { TrackpadAxisRange(it.min, it.max) }
+        if (detectedRange?.isValid == true) {
+            return detectedRange
         }
+
+        val fallbackMax = when (axis) {
+            MotionEvent.AXIS_X -> trackpadDecorMotionView?.width?.takeIf { it > 0 }
+                ?: resources.displayMetrics.widthPixels
+            MotionEvent.AXIS_Y -> trackpadDecorMotionView?.height?.takeIf { it > 0 }
+                ?: resources.displayMetrics.heightPixels
+            else -> 1
+        }.toFloat()
+        return TrackpadAxisRange(0f, fallbackMax.coerceAtLeast(1f))
     }
 
     private fun motionActionName(action: Int): String {
@@ -5632,6 +5652,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     private data class NativeTrackpadGestureStart(
         val x: Float,
         val y: Float,
+        val xRange: TrackpadAxisRange,
         val origin: String,
         val actionName: String,
         val deviceId: Int,
