@@ -94,9 +94,10 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         private const val MODIFIER_ICON_ACTIVE = 1
         private const val MODIFIER_ICON_LOCKED = 2
         private const val DISCORD_PACKAGE_NAME = "com.discord"
+        private const val TELEGRAM_PACKAGE_NAME = "org.telegram.messenger"
         private val MESSENGER_ENTER_BEHAVIOR_PACKAGES = setOf(
             "com.whatsapp",
-            "org.telegram.messenger",
+            TELEGRAM_PACKAGE_NAME,
             "org.thoughtcrime.securesms",
             DISCORD_PACKAGE_NAME,
             "im.vector.app",
@@ -1952,6 +1953,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                         KeyboardVisibilityController.RenderedSurface.CANDIDATES_VIEW
                     else -> KeyboardVisibilityController.RenderedSurface.HIDDEN
                 }
+            },
+            requiresCandidatesSurfaceRecovery = {
+                currentPackageName == TELEGRAM_PACKAGE_NAME
             },
             setRequestedInputViewShown = { shown -> requestedInputViewShown = shown },
             attachInputView = { view -> setInputView(view) },

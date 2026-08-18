@@ -94,6 +94,74 @@ class KeyboardVisibilityControllerTest {
     }
 
     @Test
+    fun hardwareMode_telegramRecoveryKeepsSingleLegacyShowRequestPending() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setSoftwareKeyboardModeRuntimeOverride(
+            context,
+            SettingsManager.SoftwareKeyboardMode.FORCE_HARDWARE
+        )
+        val harness = createHarness(
+            currentInputConnection = mock(InputConnection::class.java),
+            inputViewActive = true,
+            requiresCandidatesSurfaceRecovery = true
+        )
+
+        harness.controller.ensureImeSurfaceVisible()
+        harness.controller.ensureImeSurfaceVisible()
+
+        assertEquals(1, harness.candidatesVisibilityChanges)
+        assertEquals(1, harness.postedActionCount)
+        assertTrue(harness.inputViewShowRequests.isEmpty())
+        assertFalse(harness.controller.isExpectedSurfaceRequestedOrShown())
+
+        harness.runPostedActions()
+
+        assertEquals(listOf(false), harness.inputViewShowRequests)
+    }
+
+    @Test
+    fun hardwareMode_hiddenNonTelegramCandidatesDoNotUseLegacyShowRequest() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setSoftwareKeyboardModeRuntimeOverride(
+            context,
+            SettingsManager.SoftwareKeyboardMode.FORCE_HARDWARE
+        )
+        val harness = createHarness(
+            currentInputConnection = mock(InputConnection::class.java),
+            inputViewActive = true,
+            initialRenderedSurface = KeyboardVisibilityController.RenderedSurface.HIDDEN
+        )
+
+        harness.controller.ensureImeSurfaceVisible()
+        harness.runPostedActions()
+
+        assertTrue(harness.inputViewShowRequests.isEmpty())
+        assertTrue(harness.controller.isExpectedSurfaceRequestedOrShown())
+    }
+
+    @Test
+    fun hardwareMode_staleTelegramRecoveryDoesNotClearNewerRequest() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setSoftwareKeyboardModeRuntimeOverride(
+            context,
+            SettingsManager.SoftwareKeyboardMode.FORCE_HARDWARE
+        )
+        val harness = createHarness(
+            currentInputConnection = mock(InputConnection::class.java),
+            inputViewActive = true,
+            requiresCandidatesSurfaceRecovery = true
+        )
+
+        harness.controller.ensureImeSurfaceVisible()
+        harness.controller.cancelPendingSurfaceTransition()
+        harness.controller.ensureImeSurfaceVisible()
+        harness.runPostedActions()
+
+        assertEquals(listOf(false), harness.inputViewShowRequests)
+        assertFalse(harness.controller.isExpectedSurfaceRequestedOrShown())
+    }
+
+    @Test
     fun hardwareMode_pastieraTelegramPastieraRearmsCandidatesWithoutSoftInput() {
         val context = RuntimeEnvironment.getApplication()
         SettingsManager.setSoftwareKeyboardModeRuntimeOverride(
@@ -325,7 +393,9 @@ class KeyboardVisibilityControllerTest {
     private fun createHarness(
         currentInputConnection: InputConnection? = null,
         inputViewShown: Boolean = false,
-        inputViewActive: Boolean = false
+        inputViewActive: Boolean = false,
+        initialRenderedSurface: KeyboardVisibilityController.RenderedSurface? = null,
+        requiresCandidatesSurfaceRecovery: Boolean = false
     ): VisibilityHarness {
         val context = RuntimeEnvironment.getApplication()
         val prefs = context.getSharedPreferences("keyboard_visibility_controller_test", Context.MODE_PRIVATE)
@@ -343,7 +413,7 @@ class KeyboardVisibilityControllerTest {
         val postedActions = mutableListOf<() -> Unit>()
         val inputWindowShowRequests = mutableListOf<Boolean>()
         var inputViewHideRequests = 0
-        var renderedSurface = if (inputViewShown) {
+        var renderedSurface = initialRenderedSurface ?: if (inputViewShown) {
             KeyboardVisibilityController.RenderedSurface.FULL_INPUT_VIEW
         } else {
             KeyboardVisibilityController.RenderedSurface.CANDIDATES_VIEW
@@ -359,6 +429,7 @@ class KeyboardVisibilityControllerTest {
             currentInputConnection = { currentInputConnection },
             isInputViewShown = { inputViewShown },
             renderedSurface = { renderedSurface },
+            requiresCandidatesSurfaceRecovery = { requiresCandidatesSurfaceRecovery },
             setRequestedInputViewShown = { requestedInputViewShownChanges += it },
             attachInputView = { inputViewAttachments += 1 },
             setCandidatesSurfaceActive = { candidatesSurfaceActiveChanges += it },
