@@ -1,11 +1,72 @@
 package it.palsoftware.pastiera.backup
 
+import it.palsoftware.pastiera.DeviceIdentitySnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class RestoreManagerAndBackupContractTest {
+
+    @Test
+    fun backupMetadata_roundTripsOptionalDeviceIdentityAndReadsLegacyMetadata() {
+        val sourceDevice = device("titan2", "Titan 2")
+        val metadata = BackupMetadata(
+            versionCode = 42,
+            versionName = "test",
+            timestamp = "2026-08-17T00:00:00Z",
+            components = listOf("prefs/pastiera_prefs.json"),
+            sourceDevice = sourceDevice
+        )
+        val currentFile = File.createTempFile("pastiera_metadata_", ".json")
+        val legacyFile = File.createTempFile("pastiera_metadata_legacy_", ".json")
+        try {
+            currentFile.writeText(metadata.toJsonString())
+            legacyFile.writeText(
+                """{"versionCode":1,"versionName":"legacy","timestamp":"now","components":[]}"""
+            )
+
+            assertEquals(sourceDevice, BackupMetadata.fromFile(currentFile)?.sourceDevice)
+            assertNull(BackupMetadata.fromFile(legacyFile)?.sourceDevice)
+        } finally {
+            currentFile.delete()
+            legacyFile.delete()
+        }
+    }
+
+    @Test
+    fun deviceChange_requiresTwoDifferentRecognizedStableIds() {
+        val titan2 = device("titan2", "Titan 2")
+        val elite = device("titan2-elite", "Titan 2 Elite")
+        val unknown = device(null, "Unknown device")
+
+        assertEquals(
+            RestoreManager.DeviceChange(titan2, elite),
+            RestoreManager.detectDeviceChange(titan2, elite)
+        )
+        assertNull(RestoreManager.detectDeviceChange(elite, elite))
+        assertNull(RestoreManager.detectDeviceChange(null, elite))
+        assertNull(RestoreManager.detectDeviceChange(titan2, unknown))
+    }
+
+    @Test
+    fun adaptiveImportPolicy_containsOnlyTargetDeviceDerivedSettings() {
+        assertEquals(
+            setOf(
+                "pastiera_prefs:physical_keyboard_profile_override",
+                "pastiera_prefs:titan2_layout_enabled",
+                "pastiera_prefs:titan2_elite_rounded_corner_insets"
+            ),
+            BackupPreferencePolicy.targetDeviceDerivedKeys
+        )
+    }
 
     @Test
     fun userDictionaryEntries_isRecognizedForFreshInstallRestore() {
@@ -21,6 +82,19 @@ class RestoreManagerAndBackupContractTest {
             PreferenceSchemas.expectedType("pastiera_prefs", "user_dictionary_entries")
         )
     }
+
+    private fun device(stableId: String?, displayName: String) = DeviceIdentitySnapshot(
+        stableId = stableId,
+        displayName = displayName,
+        brand = "unihertz",
+        manufacturer = "unihertz",
+        model = displayName,
+        device = stableId.orEmpty(),
+        product = stableId.orEmpty(),
+        board = "board",
+        buildDisplay = displayName,
+        buildFingerprint = "fingerprint"
+    )
 
     @Test
     fun snippetExpansionPreferences_areRecognizedForFreshInstallRestore() {

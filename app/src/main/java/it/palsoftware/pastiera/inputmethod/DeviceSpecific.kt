@@ -3,6 +3,7 @@ package it.palsoftware.pastiera.inputmethod
 import android.os.Build
 import android.view.InputDevice
 import android.view.KeyEvent
+import it.palsoftware.pastiera.DeviceIdentitySnapshot
 
 object DeviceSpecific {
     enum class InputDeviceKind {
@@ -256,7 +257,8 @@ object DeviceSpecific {
         val device: String,
         val product: String,
         val board: String,
-        val display: String
+        val display: String,
+        val fingerprint: String
     ) {
         fun containsAny(vararg tokens: String): Boolean {
             return tokens.any { token ->
@@ -334,7 +336,8 @@ object DeviceSpecific {
             device = Build.DEVICE.orEmpty().lowercase(),
             product = Build.PRODUCT.orEmpty().lowercase(),
             board = Build.BOARD.orEmpty().lowercase(),
-            display = Build.DISPLAY.orEmpty().lowercase()
+            display = Build.DISPLAY.orEmpty().lowercase(),
+            fingerprint = Build.FINGERPRINT.orEmpty()
         )
     }
 
@@ -499,7 +502,8 @@ object DeviceSpecific {
         device: String,
         product: String,
         board: String = "",
-        display: String = ""
+        display: String = "",
+        fingerprint: String = ""
     ) {
         testBuildFingerprintOverride = BuildFingerprint(
             brand = brand.lowercase(),
@@ -508,7 +512,8 @@ object DeviceSpecific {
             device = device.lowercase(),
             product = product.lowercase(),
             board = board.lowercase(),
-            display = display.lowercase()
+            display = display.lowercase(),
+            fingerprint = fingerprint
         )
     }
 
@@ -570,6 +575,53 @@ object DeviceSpecific {
 
     fun deviceName(): String {
         return Build.BRAND + " " + Build.MODEL
+    }
+
+    fun detectedDeviceIdentity(): DeviceIdentitySnapshot {
+        val fingerprint = buildFingerprint()
+        val model = resolveDeviceProfile().model
+        val fallbackName = listOf(fingerprint.brand, fingerprint.model)
+            .filter(String::isNotBlank)
+            .joinToString(" ")
+            .ifBlank { "Unknown device" }
+        return DeviceIdentitySnapshot(
+            stableId = when (model) {
+                KeyboardModel.Q25 -> "q25"
+                KeyboardModel.KEY2 -> "key2"
+                KeyboardModel.TITAN_2_ELITE_QWERTY -> "titan2-elite"
+                KeyboardModel.TITAN_2 -> "titan2"
+                KeyboardModel.TITAN_POCKET -> "titan-pocket"
+                KeyboardModel.TITAN_SLIM -> "titan-slim"
+                KeyboardModel.TITAN_ORIGINAL -> "titan"
+                KeyboardModel.MINIMAL_PHONE -> "minimal-phone"
+                KeyboardModel.CLICKS_RAZR,
+                KeyboardModel.CLICKS_PIXEL,
+                KeyboardModel.CLICKS_POWER,
+                KeyboardModel.UNKNOWN -> null
+            },
+            displayName = when (model) {
+                KeyboardModel.Q25 -> "Q25"
+                KeyboardModel.KEY2 -> "BlackBerry KEY2"
+                KeyboardModel.TITAN_2_ELITE_QWERTY -> "Titan 2 Elite"
+                KeyboardModel.TITAN_2 -> "Titan 2"
+                KeyboardModel.TITAN_POCKET -> "Titan Pocket"
+                KeyboardModel.TITAN_SLIM -> "Titan Slim"
+                KeyboardModel.TITAN_ORIGINAL -> "Titan"
+                KeyboardModel.MINIMAL_PHONE -> "Minimal Phone"
+                KeyboardModel.CLICKS_RAZR,
+                KeyboardModel.CLICKS_PIXEL,
+                KeyboardModel.CLICKS_POWER,
+                KeyboardModel.UNKNOWN -> fallbackName
+            },
+            brand = fingerprint.brand,
+            manufacturer = fingerprint.manufacturer,
+            model = fingerprint.model,
+            device = fingerprint.device,
+            product = fingerprint.product,
+            board = fingerprint.board,
+            buildDisplay = fingerprint.display,
+            buildFingerprint = fingerprint.fingerprint
+        )
     }
 
     fun keyboardName(): String {

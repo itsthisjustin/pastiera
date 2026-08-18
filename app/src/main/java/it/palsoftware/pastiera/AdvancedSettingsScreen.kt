@@ -2,6 +2,7 @@ package it.palsoftware.pastiera
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,12 +38,14 @@ import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
@@ -68,6 +71,7 @@ import it.palsoftware.pastiera.BuildConfig
 import it.palsoftware.pastiera.R
 import it.palsoftware.pastiera.backup.BackupManager
 import it.palsoftware.pastiera.backup.RestoreManager
+import it.palsoftware.pastiera.backup.RestoreInspectionResult
 import androidx.compose.material3.Surface
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -103,6 +107,9 @@ fun AdvancedSettingsScreen(
     }
     var shizukuStatus by remember { mutableStateOf(ShizukuStatus.NotConnected) }
     var trackpadProvider by remember { mutableStateOf(SettingsManager.getTrackpadProvider(context)) }
+    var pendingDeviceChangeRestore by remember {
+        mutableStateOf<Pair<Uri, RestoreManager.DeviceChange>?>(null)
+    }
     var navigationDirection by remember { mutableStateOf(AdvancedNavigationDirection.Push) }
     val navigationStack = remember {
         mutableStateListOf<AdvancedDestination>(AdvancedDestination.Main)
@@ -178,28 +185,87 @@ fun AdvancedSettingsScreen(
         }
     }
 
+    fun performRestore(uri: Uri, importMode: RestoreManager.ImportMode) {
+        scope.launch {
+            val result = RestoreManager.restore(context, uri, importMode)
+            val message = when (result) {
+                is it.palsoftware.pastiera.backup.RestoreResult.Success ->
+                    context.getString(R.string.restore_completed)
+                is it.palsoftware.pastiera.backup.RestoreResult.Failure ->
+                    context.getString(R.string.restore_failed, result.reason)
+            }
+            snackbarHostState.showSnackbar(message)
+
+            // Wait a bit for SharedPreferences to be written (apply() is asynchronous)
+            kotlinx.coroutines.delay(100)
+
+            // Explicitly reload values after restore to ensure UI is updated
+            swipeIncrementalThreshold = SettingsManager.getSwipeIncrementalThreshold(context)
+            clipboardRetentionTime = SettingsManager.getClipboardRetentionTime(context).toString()
+        }
+    }
+
     val restoreLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val result = RestoreManager.restore(context, uri)
-                val message = when (result) {
-                    is it.palsoftware.pastiera.backup.RestoreResult.Success ->
-                        context.getString(R.string.restore_completed)
-                    is it.palsoftware.pastiera.backup.RestoreResult.Failure ->
-                        context.getString(R.string.restore_failed, result.reason)
+                when (val inspection = RestoreManager.inspect(context, uri)) {
+                    is RestoreInspectionResult.Success -> {
+                        val deviceChange = inspection.deviceChange
+                        if (deviceChange == null) {
+                            performRestore(uri, RestoreManager.ImportMode.UNCHANGED)
+                        } else {
+                            pendingDeviceChangeRestore = uri to deviceChange
+                        }
+                    }
+                    is RestoreInspectionResult.Failure -> {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.restore_failed, inspection.reason)
+                        )
+                    }
                 }
-                snackbarHostState.showSnackbar(message)
-                
-                // Wait a bit for SharedPreferences to be written (apply() is asynchronous)
-                kotlinx.coroutines.delay(100)
-                
-                // Explicitly reload values after restore to ensure UI is updated
-                swipeIncrementalThreshold = SettingsManager.getSwipeIncrementalThreshold(context)
-                clipboardRetentionTime = SettingsManager.getClipboardRetentionTime(context).toString()
             }
         }
+    }
+
+    pendingDeviceChangeRestore?.let { (uri, deviceChange) ->
+        AlertDialog(
+            onDismissRequest = { pendingDeviceChangeRestore = null },
+            title = { Text(stringResource(R.string.restore_device_change_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.restore_device_change_message,
+                        deviceChange.source.displayName,
+                        deviceChange.target.displayName
+                    )
+                )
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(
+                        onClick = {
+                            pendingDeviceChangeRestore = null
+                            performRestore(uri, RestoreManager.ImportMode.ADAPT_TO_CURRENT_DEVICE)
+                        }
+                    ) {
+                        Text(stringResource(R.string.restore_device_change_adapt))
+                    }
+                    TextButton(
+                        onClick = {
+                            pendingDeviceChangeRestore = null
+                            performRestore(uri, RestoreManager.ImportMode.UNCHANGED)
+                        }
+                    ) {
+                        Text(stringResource(R.string.restore_device_change_unchanged))
+                    }
+                    TextButton(onClick = { pendingDeviceChangeRestore = null }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            }
+        )
     }
     
     AnimatedContent(

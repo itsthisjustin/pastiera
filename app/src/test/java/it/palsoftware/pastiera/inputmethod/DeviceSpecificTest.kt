@@ -187,6 +187,28 @@ class DeviceSpecificTest {
     }
 
     @Test
+    fun shippedTitan2EliteFingerprint_exposesStableBackupIdentity() {
+        DeviceSpecific.setBuildFingerprintForTests(
+            brand = "Unihertz",
+            manufacturer = "Unihertz",
+            model = "Titan 2",
+            device = "Titan_2",
+            product = "Titan_2_EEA",
+            board = "G72BoardV1",
+            display = "Titan 2 Elite_EEA_V02.00.02",
+            fingerprint = "Unihertz/Titan_2_EEA/Titan_2:16/build/V02.00.02:user/release-keys"
+        )
+
+        val identity = DeviceSpecific.detectedDeviceIdentity()
+
+        assertEquals("titan2-elite", identity.stableId)
+        assertEquals("Titan 2 Elite", identity.displayName)
+        assertEquals("g72boardv1", identity.board)
+        assertTrue(identity.buildDisplay.contains("elite"))
+        assertTrue(identity.buildFingerprint.contains("V02.00.02"))
+    }
+
+    @Test
     fun q25CtrlEvent_remapsToCtrlKeyAndMeta() {
         DeviceSpecific.setBuildFingerprintForTests(
             brand = "zinwa",

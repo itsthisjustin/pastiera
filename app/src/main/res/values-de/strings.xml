@@ -881,6 +881,10 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="restore_completed">Wiederherstellung abgeschlossen</string>
     <string name="backup_failed">Sicherung fehlgeschlagen: %1$s</string>
     <string name="restore_failed">Wiederherstellung fehlgeschlagen: %1$s</string>
+    <string name="restore_device_change_title">Sicherung von einem anderen Gerät</string>
+    <string name="restore_device_change_message">Diese Sicherung wurde auf %1$s erstellt und wird auf %2$s importiert. Beim Anpassen bleiben das erkannte Tastaturprofil und die displayspezifischen Einstellungen dieses Geräts erhalten.</string>
+    <string name="restore_device_change_adapt">Für dieses Gerät anpassen</string>
+    <string name="restore_device_change_unchanged">Unverändert importieren</string>
     <string name="swipe_incremental_threshold_description">Erforderliche Entfernung, um den Cursor um eine Position zu bewegen. Niedrigere Werte lassen den Cursor schneller bewegen.</string>
     <string name="swipe_to_move_cursor">Wischen, um den Cursor zu bewegen</string>
     <string name="dip_unit">DIP</string>

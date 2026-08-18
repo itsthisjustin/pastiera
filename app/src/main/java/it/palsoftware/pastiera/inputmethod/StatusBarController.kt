@@ -39,6 +39,7 @@ import it.palsoftware.pastiera.inputmethod.ui.ClipboardHistoryView
 import it.palsoftware.pastiera.inputmethod.ui.EmojiPickerView
 import it.palsoftware.pastiera.inputmethod.ui.HamburgerMenuView
 import it.palsoftware.pastiera.inputmethod.ui.LedStatusView
+import it.palsoftware.pastiera.inputmethod.ui.ModifierLedLayouts
 import it.palsoftware.pastiera.inputmethod.ui.VariationBarView
 import it.palsoftware.pastiera.inputmethod.ui.KeyboardThemeColors
 import it.palsoftware.pastiera.inputmethod.suggestions.ui.FullSuggestionsBar
@@ -248,7 +249,7 @@ class StatusBarController(
     companion object {
         private const val TAG = "StatusBarController"
         private val DEFAULT_BACKGROUND = Color.parseColor("#000000")
-        private const val TITAN_2_ELITE_CORNER_FALLBACK_DP = 24f
+        private const val TITAN_2_ELITE_CORNER_FALLBACK_RADIUS_DP = 24f
     }
 
     data class StatusSnapshot(
@@ -332,6 +333,8 @@ class StatusBarController(
     private var baseLeftPadding: Int = 0
     private var baseRightPadding: Int = 0
     private var baseBottomPadding: Int = 0
+    private var bottomRowBaseLeftPadding: Int = 0
+    private var bottomRowBaseRightPadding: Int = 0
     private var lastHamburgerInputConnection: android.view.inputmethod.InputConnection? = null
     private var lastInsetsLogSignature: String? = null
     private var softwareKeyboardShown: Boolean = false
@@ -428,6 +431,11 @@ class StatusBarController(
         emojiPickerView?.themeOverride = activeColors
         applySurfaceCloseButtonTheme(activeColors)
     }
+
+    private fun modifierLedLayout() = ModifierLedLayouts.resolve(
+        physicalProfileOverride = SettingsManager.getPhysicalKeyboardProfileOverride(context),
+        titan2EliteAutoDetected = DeviceSpecific.isTitan2EliteDevice()
+    )
 
     private fun statusBarCallbacks(): StatusBarCallbacks =
         StatusBarCallbacks(
@@ -592,37 +600,39 @@ class StatusBarController(
                     } else {
                         0
                     }
-                    val fallbackCornerInset = if (useTitan2EliteRoundedCornerInsets) {
-                        dpToPx(TITAN_2_ELITE_CORNER_FALLBACK_DP)
+                    val fallbackCornerRadius = if (useTitan2EliteRoundedCornerInsets) {
+                        dpToPx(TITAN_2_ELITE_CORNER_FALLBACK_RADIUS_DP)
                     } else {
                         0
                     }
-                    val leftCornerInset = if (useTitan2EliteRoundedCornerInsets) {
-                        bottomLeftRadius.takeIf { it > 0 } ?: fallbackCornerInset
-                    } else {
-                        0
-                    }
-                    val rightCornerInset = if (useTitan2EliteRoundedCornerInsets) {
-                        bottomRightRadius.takeIf { it > 0 } ?: fallbackCornerInset
-                    } else {
-                        0
-                    }
-                    val appliedLeftPadding = baseLeftPadding + if (useTitan2EliteRoundedCornerInsets) {
-                        max(max(navAndGestures.left, cutout.left), leftCornerInset)
-                    } else {
-                        0
-                    }
-                    val appliedRightPadding = baseRightPadding + if (useTitan2EliteRoundedCornerInsets) {
-                        max(max(navAndGestures.right, cutout.right), rightCornerInset)
-                    } else {
-                        0
-                    }
+                    val cornerInsets = Titan2EliteBottomRowSafeArea.resolveInsetsPx(
+                        enabled = useTitan2EliteRoundedCornerInsets,
+                        leftCornerRadiusPx = bottomLeftRadius,
+                        rightCornerRadiusPx = bottomRightRadius,
+                        fallbackCornerRadiusPx = fallbackCornerRadius
+                    )
+                    val appliedBottomRowLeftPadding = bottomRowBaseLeftPadding +
+                        if (useTitan2EliteRoundedCornerInsets) {
+                            max(cutout.left, cornerInsets.left)
+                        } else {
+                            0
+                        }
+                    val appliedBottomRowRightPadding = bottomRowBaseRightPadding +
+                        if (useTitan2EliteRoundedCornerInsets) {
+                            max(cutout.right, cornerInsets.right)
+                        } else {
+                            0
+                        }
                     val bottomInset = max(navAndGestures.bottom, cutout.bottom)
                     val appliedBottomPadding = baseBottomPadding + bottomInset
                     view.updatePadding(
-                        left = appliedLeftPadding,
-                        right = appliedRightPadding,
+                        left = baseLeftPadding,
+                        right = baseRightPadding,
                         bottom = appliedBottomPadding
+                    )
+                    variationsWrapper?.updatePadding(
+                        left = appliedBottomRowLeftPadding,
+                        right = appliedBottomRowRightPadding
                     )
                     logImeOverlayInsetsIfEnabled(
                         navBottom = navAndGestures.bottom,
@@ -695,7 +705,12 @@ class StatusBarController(
             }
 
             variationsWrapper = variationBarView?.ensureView()
+            variationsWrapper?.let { bottomRow ->
+                bottomRowBaseLeftPadding = bottomRow.paddingLeft
+                bottomRowBaseRightPadding = bottomRow.paddingRight
+            }
             attachHamburgerMenu(variationsWrapper)
+            ledStatusView.layout = modifierLedLayout()
             val ledStrip = ledStatusView.ensureView()
             ledStatusView.onLongPressListener = { handleMinimalUiToggleFromMenu() }
 
@@ -2772,6 +2787,7 @@ class StatusBarController(
             theme = activeColors
         )
 
+        ledStatusView.layout = modifierLedLayout()
         val showLedStrip = if (isFullSoftwareKeyboardMode) {
             softwareThemeSettings.showLeds
         } else {

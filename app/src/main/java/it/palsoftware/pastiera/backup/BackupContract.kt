@@ -1,5 +1,6 @@
 package it.palsoftware.pastiera.backup
 
+import it.palsoftware.pastiera.DeviceIdentitySnapshot
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -7,7 +8,8 @@ data class BackupMetadata(
     val versionCode: Int,
     val versionName: String,
     val timestamp: String,
-    val components: List<String>
+    val components: List<String>,
+    val sourceDevice: DeviceIdentitySnapshot? = null
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -17,6 +19,7 @@ data class BackupMetadata(
         val componentsArray = JSONArray()
         components.forEach { componentsArray.put(it) }
         json.put("components", componentsArray)
+        sourceDevice?.let { json.put("sourceDevice", it.toJson()) }
         return json
     }
 
@@ -36,7 +39,8 @@ data class BackupMetadata(
                     versionCode = json.optInt("versionCode", 0),
                     versionName = json.optString("versionName", ""),
                     timestamp = json.optString("timestamp", ""),
-                    components = components
+                    components = components,
+                    sourceDevice = json.optJSONObject("sourceDevice")?.toDeviceIdentitySnapshot()
                 )
             } catch (_: Exception) {
                 null
@@ -44,6 +48,32 @@ data class BackupMetadata(
         }
     }
 }
+
+private fun DeviceIdentitySnapshot.toJson(): JSONObject = JSONObject().apply {
+    stableId?.let { put("stableId", it) }
+    put("displayName", displayName)
+    put("brand", brand)
+    put("manufacturer", manufacturer)
+    put("model", model)
+    put("device", device)
+    put("product", product)
+    put("board", board)
+    put("buildDisplay", buildDisplay)
+    put("buildFingerprint", buildFingerprint)
+}
+
+private fun JSONObject.toDeviceIdentitySnapshot(): DeviceIdentitySnapshot = DeviceIdentitySnapshot(
+    stableId = optString("stableId").takeIf(String::isNotBlank),
+    displayName = optString("displayName", "Unknown device"),
+    brand = optString("brand"),
+    manufacturer = optString("manufacturer"),
+    model = optString("model"),
+    device = optString("device"),
+    product = optString("product"),
+    board = optString("board"),
+    buildDisplay = optString("buildDisplay"),
+    buildFingerprint = optString("buildFingerprint")
+)
 
 enum class PreferenceValueType {
     BOOLEAN,
@@ -320,6 +350,7 @@ object PreferenceSchemas {
             "pastierina_mode_override" to PreferenceValueType.STRING,
             "pastierina_mode_active" to PreferenceValueType.BOOLEAN,
             "software_keyboard_mode" to PreferenceValueType.STRING,
+            "physical_keyboard_profile_override" to PreferenceValueType.STRING,
             "software_keyboard_layout_style" to PreferenceValueType.STRING,
             "software_keyboard_number_row_enabled" to PreferenceValueType.BOOLEAN,
             "software_keyboard_nearest_key_touch_enabled" to PreferenceValueType.BOOLEAN,

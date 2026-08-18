@@ -7,6 +7,7 @@ import android.util.Log
 import it.palsoftware.pastiera.BuildConfig
 import it.palsoftware.pastiera.SettingsManager
 import it.palsoftware.pastiera.data.layout.LayoutFileStore
+import it.palsoftware.pastiera.inputmethod.DeviceSpecific
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -31,7 +32,8 @@ object BackupManager {
                 versionCode = BuildConfig.VERSION_CODE,
                 versionName = BuildConfig.VERSION_NAME,
                 timestamp = OffsetDateTime.now(ZoneOffset.UTC).toString(),
-                components = components
+                components = components,
+                sourceDevice = DeviceSpecific.detectedDeviceIdentity()
             )
             File(workingDir, "backup_meta.json").writeText(metadata.toJsonString())
 
@@ -96,6 +98,9 @@ object PreferencesBackupHelper {
         json.put("name", prefName)
         val entries = JSONObject()
         prefs.all.forEach { (key, value) ->
+            if (BackupPreferencePolicy.shouldExcludeFromBackup(prefName, key)) {
+                return@forEach
+            }
             val prefValue = PreferenceValue.fromAny(value) ?: return@forEach
             entries.put(key, prefValue.toJson())
         }
@@ -131,7 +136,8 @@ object PreferencesBackupHelper {
 
     fun restorePreferences(
         context: Context,
-        backedUpPrefs: Map<String, Map<String, PreferenceValue>>
+        backedUpPrefs: Map<String, Map<String, PreferenceValue>>,
+        excludedKeys: Set<String> = emptySet()
     ): PreferencesRestoreSummary {
         val applied = mutableListOf<String>()
         val skipped = mutableListOf<String>()
@@ -142,17 +148,22 @@ object PreferencesBackupHelper {
             val editor = prefs.edit()
 
             entries.forEach { (key, value) ->
+                val qualifiedKey = "$prefName:$key"
+                if (excludedKeys.contains(qualifiedKey)) {
+                    skipped.add(qualifiedKey)
+                    return@forEach
+                }
                 val expectedType = PreferenceSchemas.expectedType(prefName, key)
                 val recognized = PreferenceSchemas.isRecognized(prefName, key, currentKeys)
                 if (!recognized) {
                     Log.w(TAG, "Ignoring unknown preference key $key for $prefName")
-                    skipped.add("$prefName:$key")
+                    skipped.add(qualifiedKey)
                     return@forEach
                 }
 
                 val coerced = value.coerceTo(expectedType)
                 if (coerced == null) {
-                    skipped.add("$prefName:$key")
+                    skipped.add(qualifiedKey)
                     return@forEach
                 }
 
@@ -167,11 +178,11 @@ object PreferencesBackupHelper {
                         if (setValue != null) {
                             editor.putStringSet(key, setValue)
                         } else {
-                            skipped.add("$prefName:$key")
+                            skipped.add(qualifiedKey)
                         }
                     }
                 }
-                applied.add("$prefName:$key")
+                applied.add(qualifiedKey)
             }
             // Use commit() instead of apply() to ensure values are written synchronously
             // This ensures listeners are called immediately and UI updates work correctly

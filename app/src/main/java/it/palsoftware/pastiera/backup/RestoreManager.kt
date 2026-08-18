@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import it.palsoftware.pastiera.DeviceIdentitySnapshot
 import it.palsoftware.pastiera.AppBroadcastActions
+import it.palsoftware.pastiera.inputmethod.DeviceSpecific
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -17,6 +19,16 @@ object RestoreManager {
     enum class PostRestoreAction {
         REFRESH_USER_DICTIONARY
     }
+
+    enum class ImportMode {
+        UNCHANGED,
+        ADAPT_TO_CURRENT_DEVICE
+    }
+
+    data class DeviceChange(
+        val source: DeviceIdentitySnapshot,
+        val target: DeviceIdentitySnapshot
+    )
 
     private data class PostRestoreTriggerRule(
         val action: PostRestoreAction,
@@ -32,7 +44,35 @@ object RestoreManager {
         )
     )
 
-    suspend fun restore(context: Context, sourceUri: Uri): RestoreResult = withContext(Dispatchers.IO) {
+    suspend fun inspect(context: Context, sourceUri: Uri): RestoreInspectionResult =
+        withContext(Dispatchers.IO) {
+            val workingDir = File(context.cacheDir, "restore_inspection_${System.currentTimeMillis()}")
+                .apply { mkdirs() }
+            val extractedDir = File(workingDir, "unzipped").apply { mkdirs() }
+            try {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    ZipHelper.unzip(input, extractedDir)
+                } ?: return@withContext RestoreInspectionResult.Failure("Unable to open source backup")
+
+                val metadata = BackupMetadata.fromFile(File(extractedDir, "backup_meta.json"))
+                val currentDevice = DeviceSpecific.detectedDeviceIdentity()
+                RestoreInspectionResult.Success(
+                    metadata = metadata,
+                    deviceChange = detectDeviceChange(metadata?.sourceDevice, currentDevice)
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Restore inspection failed", e)
+                RestoreInspectionResult.Failure(e.message ?: "Unable to inspect backup")
+            } finally {
+                workingDir.deleteRecursively()
+            }
+        }
+
+    suspend fun restore(
+        context: Context,
+        sourceUri: Uri,
+        importMode: ImportMode = ImportMode.UNCHANGED
+    ): RestoreResult = withContext(Dispatchers.IO) {
         val workingDir = File(context.cacheDir, "restore_${System.currentTimeMillis()}").apply { mkdirs() }
         val extractedDir = File(workingDir, "unzipped").apply { mkdirs() }
 
@@ -47,7 +87,17 @@ object RestoreManager {
 
             val prefsData = PreferencesBackupHelper.readPreferencesFromBackup(prefsDir)
             val fileSummary = FileBackupHelper.restoreFiles(context, filesDir)
-            val prefsSummary = PreferencesBackupHelper.restorePreferences(context, prefsData)
+            val excludedKeys = BackupPreferencePolicy.runtimeDerivedKeys +
+                if (importMode == ImportMode.ADAPT_TO_CURRENT_DEVICE) {
+                    BackupPreferencePolicy.targetDeviceDerivedKeys
+                } else {
+                    emptySet()
+                }
+            val prefsSummary = PreferencesBackupHelper.restorePreferences(
+                context,
+                prefsData,
+                excludedKeys = excludedKeys
+            )
             val postRestoreActions = collectTriggeredPostRestoreActions(prefsSummary, fileSummary)
             notifyPostRestoreEffects(context, postRestoreActions)
 
@@ -64,6 +114,15 @@ object RestoreManager {
             extractedDir.deleteRecursively()
             workingDir.deleteRecursively()
         }
+    }
+
+    internal fun detectDeviceChange(
+        source: DeviceIdentitySnapshot?,
+        target: DeviceIdentitySnapshot
+    ): DeviceChange? {
+        val sourceId = source?.stableId ?: return null
+        val targetId = target.stableId ?: return null
+        return if (sourceId != targetId) DeviceChange(source, target) else null
     }
 
     internal fun shouldNotifyUserDictionaryRefresh(
@@ -111,6 +170,15 @@ object RestoreManager {
             }
         }
     }
+}
+
+sealed class RestoreInspectionResult {
+    data class Success(
+        val metadata: BackupMetadata?,
+        val deviceChange: RestoreManager.DeviceChange?
+    ) : RestoreInspectionResult()
+
+    data class Failure(val reason: String) : RestoreInspectionResult()
 }
 
 sealed class RestoreResult {
