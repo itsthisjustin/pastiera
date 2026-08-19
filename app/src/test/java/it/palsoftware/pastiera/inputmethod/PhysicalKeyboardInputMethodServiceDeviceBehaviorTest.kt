@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.InputConnection
+import it.palsoftware.pastiera.AltModifierBinding
 import it.palsoftware.pastiera.SettingsManager
 import it.palsoftware.pastiera.SymPagesConfig
 import it.palsoftware.pastiera.core.InputContextState
@@ -41,8 +42,12 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
         SettingsManager.resetSymMappings(context)
         SettingsManager.resetSymMappingsPage2(context)
         SettingsManager.setStaticVariationBarLayerStickyEnabled(context, true)
+        SettingsManager.setAutoCapitalizeFirstLetter(context, true)
+        SettingsManager.setAutoCapitalizeAfterPeriod(context, true)
         SettingsManager.setAutoCapitalizeRespectManualShiftOff(context, true)
         SettingsManager.setAutoCapitalizeRestrictedFields(context, false)
+        SettingsManager.setPhysicalKeyboardProfileOverride(context, "auto")
+        SettingsManager.setAltModifierBinding(context, AltModifierBinding.DeviceSym)
 
         service = Robolectric.buildService(PhysicalKeyboardInputMethodService::class.java)
             .create()
@@ -219,6 +224,48 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
         )
         assertTrue("commits=${recorder.committedTexts}", recorder.committedTexts.contains("a"))
         assertFalse("commits=${recorder.committedTexts}", recorder.committedTexts.contains("A"))
+    }
+
+    @Test
+    fun capWords_allAutoCapDisabled_clicksPowerAltPThenAStaysLowercase() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setAutoCapitalizeFirstLetter(context, false)
+        SettingsManager.setAutoCapitalizeAfterPeriod(context, false)
+        SettingsManager.setPhysicalKeyboardProfileOverride(context, "clicks_power")
+        setField(service, "physicalKeyboardProfileOverride", "clicks_power")
+        getField<AlternateCharacterManager>(service, "alternateCharacterManager")
+            .reloadModifierAndDeviceSymMappings()
+        focusNewField(
+            newRecorder = RecordingInputConnection(),
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        )
+
+        assertFalse(modifierController().shiftOneShot)
+
+        val t0 = 2_800L
+        tapAlt(t0)
+        service.onKeyDown(
+            KeyEvent.KEYCODE_P,
+            keyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_P, t0 + 40L, t0 + 40L)
+        )
+        service.onKeyUp(
+            KeyEvent.KEYCODE_P,
+            keyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_P, t0 + 40L, t0 + 60L)
+        )
+        service.onKeyDown(
+            KeyEvent.KEYCODE_A,
+            keyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A, t0 + 80L, t0 + 80L)
+        )
+
+        assertEquals("@a", recorder.textBeforeCursor)
+        assertFalse(
+            AutoCapitalizeHelper.shouldCapitalizeAfterBoundary(
+                context = context,
+                state = InputContextState.fromEditorInfo(editorInfo),
+                inputConnection = inputConnection,
+                keyCode = KeyEvent.KEYCODE_SPACE
+            )
+        )
     }
 
     @Test
