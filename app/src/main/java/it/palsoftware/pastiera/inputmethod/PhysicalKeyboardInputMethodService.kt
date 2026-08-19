@@ -310,6 +310,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         timeoutMs = MULTI_TAP_TIMEOUT_MS
     )
     private val bounceKeyFilter = BounceKeyFilter()
+    private val clicksPowerShiftTapFilter = ClicksPowerShiftTapFilter()
     private val accidentalKeyPressFilter = AccidentalKeyPressFilter()
     private val physicalKeyResolver = PhysicalKeyResolver()
     private val clicksPowerButtonEventMapper = ClicksPowerButtonEventMapper()
@@ -333,6 +334,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
 
         override fun onInputDeviceRemoved(deviceId: Int) {
+            clicksPowerShiftTapFilter.resetDevice(deviceId)
             accidentalKeyPressFilter.resetDevice(deviceId)
             clicksPowerButtonEventMapper.resetDevice(deviceId)
             val clicksDisconnected = connectedClicksInputDeviceIds.remove(deviceId)
@@ -351,6 +353,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
 
         override fun onInputDeviceChanged(deviceId: Int) {
+            clicksPowerShiftTapFilter.resetDevice(deviceId)
             accidentalKeyPressFilter.resetDevice(deviceId)
             clicksPowerButtonEventMapper.resetDevice(deviceId)
             SoftwareKeyboardAutoDetector.onInputDevicesChanged()
@@ -2626,6 +2629,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     
     override fun onDestroy() {
         ClicksAccessibilityKeyBridge.unregister(this)
+        clicksPowerShiftTapFilter.reset()
         accidentalKeyPressFilter.reset()
         clicksPowerButtonEventMapper.reset()
         expansionAssetScope.cancel()
@@ -3209,6 +3213,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
         DeferredPunctuationSpaceTracker.clear()
         bounceKeyFilter.reset()
+        clicksPowerShiftTapFilter.reset()
         accidentalKeyPressFilter.reset()
         cancelPendingSelectionDrivenUiWork()
         invalidateRenderedStatusSnapshot()
@@ -4207,6 +4212,23 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         }
         val keyCode = remapped.keyCode
         val event = remapped.event
+        clicksPowerShiftTapFilter.shouldConsumeKeyDown(
+            isClicksPowerKeyboard = DeviceSpecific.resolveInputProfile(
+                event,
+                physicalKeyboardProfileOverride
+            ).profileId == "clicks_power",
+            keyCode = keyCode,
+            event = event
+        )?.let { suppressed ->
+            notifyDebugKeyEvent(
+                keyCode = keyCode,
+                event = event,
+                action = "KEY_DOWN_SUPPRESSED",
+                origin = "clicks_shift_bounce",
+                outputKeyCodeName = suppressed.debugOutput()
+            )
+            return true
+        }
         bounceKeyFilter.shouldConsumeKeyDown(this, keyCode, event)?.let { suppressed ->
             notifyDebugKeyEvent(
                 keyCode = keyCode,
@@ -4870,6 +4892,16 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         val event = remapped.event
         if (keyCode == KeyEvent.KEYCODE_ENTER && consumeAltEnterUntilKeyUp) {
             consumeAltEnterUntilKeyUp = false
+            return true
+        }
+        clicksPowerShiftTapFilter.shouldConsumeKeyUp(keyCode, event)?.let { suppressed ->
+            notifyDebugKeyEvent(
+                keyCode = keyCode,
+                event = event,
+                action = "KEY_UP_SUPPRESSED",
+                origin = "clicks_shift_bounce",
+                outputKeyCodeName = suppressed.debugOutput()
+            )
             return true
         }
         bounceKeyFilter.shouldConsumeKeyUp(keyCode, event)?.let { suppressed ->

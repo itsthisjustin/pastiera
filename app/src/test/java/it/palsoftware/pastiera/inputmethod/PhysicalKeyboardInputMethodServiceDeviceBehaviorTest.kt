@@ -184,6 +184,38 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
     }
 
     @Test
+    fun clicksPower_bouncedShiftTapDoesNotEnableCapsLock() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setPhysicalKeyboardProfileOverride(context, "clicks_power")
+        setField(service, "physicalKeyboardProfileOverride", "clicks_power")
+        val t0 = 2_600L
+
+        tapShift(t0)
+        tapShift(t0 + 60L)
+
+        val modifier = modifierController()
+        assertTrue(modifier.shiftOneShot)
+        assertFalse(modifier.capsLockEnabled)
+        assertFalse(getField<Boolean>(service, "shiftLayerLatched"))
+    }
+
+    @Test
+    fun clicksPower_intentionalShiftDoubleTapStillEnablesCapsLock() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setPhysicalKeyboardProfileOverride(context, "clicks_power")
+        setField(service, "physicalKeyboardProfileOverride", "clicks_power")
+        val t0 = 2_700L
+
+        tapShift(t0)
+        tapShift(t0 + 120L)
+
+        val modifier = modifierController()
+        assertFalse(modifier.shiftOneShot)
+        assertTrue(modifier.capsLockEnabled)
+        assertTrue(getField<Boolean>(service, "shiftLayerLatched"))
+    }
+
+    @Test
     fun shiftEnter_consumesManualShift_whenAutoCapitalizeAtLineStartIsDisabled() {
         val context = RuntimeEnvironment.getApplication()
         SettingsManager.setAutoCapitalizeFirstLetter(context, false)
