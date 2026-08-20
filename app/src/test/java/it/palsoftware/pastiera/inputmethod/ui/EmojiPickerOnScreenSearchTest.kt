@@ -2,6 +2,8 @@ package it.palsoftware.pastiera.inputmethod.ui
 
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.CompletionInfo
 import android.view.inputmethod.CorrectionInfo
 import android.view.inputmethod.ExtractedText
@@ -179,6 +181,34 @@ class EmojiPickerOnScreenSearchTest {
     }
 
     @Test
+    fun emptySearchResultsKeepSearchAndBottomControlsVisible() {
+        val view = EmojiPickerView(RuntimeEnvironment.getApplication())
+        view.setPrivateField("searchQuery", "definitely-not-an-emoji")
+        view.setPrivateField(
+            "searchIndex",
+            EmojiSearchRepository.EmojiSearchIndex(emptyList())
+        )
+        invokeSetSearchPanelVisible(view, true)
+
+        invokeApplySearchNow(view)
+
+        val emptyView = view.privateField("emptyView").get(view) as View
+        val searchPanel = view.privateField("searchPanel").get(view) as View
+        val searchToggleButton = view.privateField("searchToggleButton").get(view) as View
+        val closeButton = view.privateField("closeButton").get(view) as View
+        val resultArea = emptyView.parent as ViewGroup
+
+        assertEquals(View.VISIBLE, emptyView.visibility)
+        assertEquals(View.VISIBLE, searchPanel.visibility)
+        assertEquals(View.VISIBLE, searchToggleButton.visibility)
+        assertEquals(View.VISIBLE, closeButton.visibility)
+        assertEquals(resultArea, searchPanel.parent)
+        assertTrue(resultArea.indexOfChild(emptyView) < resultArea.indexOfChild(searchPanel))
+        assertTrue(searchToggleButton.parent !== resultArea)
+        assertTrue(closeButton.parent !== resultArea)
+    }
+
+    @Test
     fun searchPanelToggleNotifiesHost() {
         val toggles = mutableListOf<Boolean>()
         val view = EmojiPickerView(RuntimeEnvironment.getApplication())
@@ -256,6 +286,12 @@ class EmojiPickerOnScreenSearchTest {
         )
         method.isAccessible = true
         method.invoke(view, visible)
+    }
+
+    private fun invokeApplySearchNow(view: EmojiPickerView) {
+        val method = EmojiPickerView::class.java.getDeclaredMethod("applySearchNow")
+        method.isAccessible = true
+        method.invoke(view)
     }
 
     private fun awaitUntil(timeoutMs: Long = 5_000, condition: () -> Boolean) {

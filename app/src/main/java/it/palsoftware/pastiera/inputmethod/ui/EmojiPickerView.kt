@@ -339,6 +339,9 @@ class EmojiPickerView(
                     1f
                 )
                 addView(recyclerView)
+                // Keep empty/error states inside the result area. A root-level MATCH_PARENT
+                // overlay would hide the search field and bottom controls when no emoji matches.
+                addView(emptyView)
                 addView(searchPanel)
             }
         )
@@ -358,7 +361,6 @@ class EmojiPickerView(
 
         addView(vertical)
         addView(loadingView)
-        addView(emptyView)
 
         layoutParams = LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
