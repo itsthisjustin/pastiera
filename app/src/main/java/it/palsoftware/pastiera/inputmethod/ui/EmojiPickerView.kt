@@ -450,7 +450,10 @@ class EmojiPickerView(
             text.delete(start, end)
             pendingSearchReplacementRange = null
         } else {
-            text.delete(text.length - 1, text.length)
+            val cursor = searchField.selectionStart.coerceIn(0, text.length)
+            if (cursor > 0) {
+                text.delete(cursor - 1, cursor)
+            }
         }
     }
 
@@ -770,8 +773,12 @@ class EmojiPickerView(
             editable.replace(start, end, text)
             searchField.setSelection(start + text.length)
         } else {
-            editable.append(text)
-            searchField.setSelection(editable.length)
+            val cursor = selectionStart
+                .takeIf { it == selectionEnd }
+                ?.coerceIn(0, editable.length)
+                ?: editable.length
+            editable.insert(cursor, text)
+            searchField.setSelection(cursor + text.length)
         }
     }
 
@@ -1242,8 +1249,8 @@ class EmojiPickerView(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        coroutineScope.cancel()
         if (!containerReordering) {
+            coroutineScope.cancel()
             // Detach outside a host reorder means the picker actually left the screen
             // (IME hidden or SYM closed): reopen fresh instead of resuming the search.
             resetSearchStateQuietly()

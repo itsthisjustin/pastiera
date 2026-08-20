@@ -1183,7 +1183,8 @@ class StatusBarController(
             mode == Mode.INPUT_VIEW &&
                 SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) == SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
         ) softwareTheme() else hardwareTheme()).toKeyboardThemeColors()
-        val wasJustAdded = view.parent !== container
+        val wasDetachedFromHost = view.parent == null
+        val needsContainerAttachment = view.parent !== container
         val pickerShownAboveSoftwareKeyboard =
             softwareKeyboardHeight != null &&
                 view.isSearchPanelShowing() &&
@@ -1196,7 +1197,7 @@ class StatusBarController(
                 )
         if (!pickerShownAboveSoftwareKeyboard) {
             dismissEmojiPickerSearchPopup(view)
-            if (!swappingKeyboardContainerChildren && (wasJustAdded || container.childCount != 1)) {
+            if (!swappingKeyboardContainerChildren && (needsContainerAttachment || container.childCount != 1)) {
                 withKeyboardContainerSwap {
                     view.reorderingWithinContainer {
                         if (container.getChildAt(0) === view) {
@@ -1231,7 +1232,7 @@ class StatusBarController(
         // Don't scroll if view is already in container (user is browsing)
         if (lastSymPageRendered != 4) {
             view.refresh() // First time or switching from another page
-        } else if (wasJustAdded) {
+        } else if (wasDetachedFromHost) {
             view.scrollToTop() // View was just added (happens when reopening after being removed)
         }
         lastSymPageRendered = 4

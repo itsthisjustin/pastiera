@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -93,11 +94,42 @@ class EmojiPickerOnScreenSearchTest {
         view.setPrivateField("isSearchPanelVisible", true)
         view.setPrivateField("searchInputCaptureEnabled", true)
         view.searchField().setText("ha")
+        view.searchField().setSelection(2)
 
         val handled = view.handleSearchBackspace()
 
         assertTrue(handled)
         assertEquals("h", view.searchText())
+    }
+
+    @Test
+    fun onScreenTextInputInsertsAtSearchCursor() {
+        val view = EmojiPickerView(RuntimeEnvironment.getApplication())
+        view.setPrivateField("isSearchPanelVisible", true)
+        view.setPrivateField("searchInputCaptureEnabled", true)
+        view.searchField().setText("hat")
+        view.searchField().setSelection(2)
+
+        val handled = view.handleSearchTextInput("u")
+
+        assertTrue(handled)
+        assertEquals("haut", view.searchText())
+        assertEquals(3, view.searchField().selectionStart)
+    }
+
+    @Test
+    fun onScreenBackspaceDeletesBeforeSearchCursor() {
+        val view = EmojiPickerView(RuntimeEnvironment.getApplication())
+        view.setPrivateField("isSearchPanelVisible", true)
+        view.setPrivateField("searchInputCaptureEnabled", true)
+        view.searchField().setText("haut")
+        view.searchField().setSelection(3)
+
+        val handled = view.handleSearchBackspace()
+
+        assertTrue(handled)
+        assertEquals("hat", view.searchText())
+        assertEquals(2, view.searchField().selectionStart)
     }
 
     @Test
@@ -188,6 +220,7 @@ class EmojiPickerOnScreenSearchTest {
 
         assertEquals(true, view.privateField("isSearchPanelVisible").get(view))
         assertEquals("rocket", view.searchText())
+        assertTrue((view.privateField("coroutineScope").get(view) as CoroutineScope).isActive)
     }
 
     @Test
