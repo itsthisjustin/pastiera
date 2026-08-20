@@ -1816,6 +1816,12 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 updateStatusBarText()
             }
         }
+        candidatesBarController.onEmojiPickerSearchPanelToggled = {
+            // The picker's search panel state is not part of the rendered snapshot; force a
+            // re-render so the picker moves to its popup surface while searching.
+            lastRenderedStatusSnapshot = null
+            updateStatusBarText()
+        }
         candidatesBarController.onUndoRequested = {
             variationInteractedDuringHold = true
             sendCtrlShortcut(KeyEvent.KEYCODE_Z)
@@ -3883,6 +3889,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
     
     override fun onWindowHidden() {
         super.onWindowHidden()
+        if (::candidatesBarController.isInitialized) {
+            candidatesBarController.dismissEmojiPickerPopups()
+        }
         keyboardVisibilityController.onImeWindowVisibilityChanged(shown = false)
         SoftwareKeyboardAutoDetector.onInputWindowHidden()
         invalidateRenderedStatusSnapshot()

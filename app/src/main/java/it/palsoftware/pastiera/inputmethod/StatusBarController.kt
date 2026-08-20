@@ -20,6 +20,7 @@ import android.widget.ImageView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.PopupWindow
 import android.widget.TextView
 import android.util.Log
 import android.util.TypedValue
@@ -144,6 +145,13 @@ class StatusBarController(
     var onSoftwareKeyboardSymToggleRequested: (() -> Unit)? = null
 
     var onSymCloseRequested: (() -> Unit)? = null
+
+    /**
+     * Fired when the inline emoji picker toggles its search panel visibility. The host must
+     * force a re-render because the panel state is internal to the picker and not part of the
+     * status snapshot; with an active search the picker moves to a popup above the keyboard.
+     */
+    var onEmojiPickerSearchPanelToggled: ((Boolean) -> Unit)? = null
 
     var onUndoRequested: (() -> Unit)? = null
         set(value) {
@@ -307,6 +315,15 @@ class StatusBarController(
     private var clipboardHistoryView: ClipboardHistoryView? = null
     private var lastClipboardCountRendered: Int = -1
     private var emojiPickerView: EmojiPickerView? = null
+    private var emojiPickerSearchPopup: PopupWindow? = null
+    private var emojiPickerSearchPopupShowPending: Boolean = false
+    private var softwareKeyboardView: AospKeyboardView? = null
+
+    // removeAllViews() on the keyboard container dispatches a touch CANCEL to the
+    // removed AospKeyboardView, whose modifier release synchronously re-runs update()
+    // and would addView() a still-attached child. Swaps run under this guard and
+    // re-entrant callers skip the reparenting entirely.
+    private var swappingKeyboardContainerChildren: Boolean = false
     private var emojiKeyButtons: MutableList<View> = mutableListOf()
     private var lastSymPageRendered: Int = 0
     private var lastSymMappingsRendered: Map<Int, String>? = null
@@ -533,6 +550,14 @@ class StatusBarController(
     }
 
     fun isPastierinaModeActive(): Boolean = pastierinaModeActive
+
+    fun dismissEmojiPickerPopup() {
+        emojiPickerSearchPopupShowPending = false
+        emojiPickerSearchPopup?.let { popup ->
+            if (popup.isShowing) popup.dismiss()
+            popup.contentView = null
+        }
+    }
 
     fun getLayout(): LinearLayout? = statusBarLayout
 
@@ -816,7 +841,10 @@ class StatusBarController(
     }
 
     fun cancelSoftwareKeyboardTouchState() {
-        (emojiKeyboardContainer?.getChildAt(0) as? AospKeyboardView)?.cancelActiveTouchState()
+        // The software keyboard can also sit below the emoji picker while its search is
+        // active, so prefer the cached instance over the container's first child.
+        (softwareKeyboardView ?: emojiKeyboardContainer?.getChildAt(0) as? AospKeyboardView)
+            ?.cancelActiveTouchState()
     }
 
     private fun toggleHamburgerMenu() {
@@ -1112,10 +1140,12 @@ class StatusBarController(
             mode == Mode.INPUT_VIEW &&
                 SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) == SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
         ) softwareTheme() else hardwareTheme()).toKeyboardThemeColors()
-        if (view.parent !== container) {
-            container.removeAllViews()
-            emojiKeyButtons.clear()
-            container.addView(view)
+        if (view.parent !== container && !swappingKeyboardContainerChildren) {
+            withKeyboardContainerSwap {
+                container.removeAllViews()
+                emojiKeyButtons.clear()
+                container.addView(view)
+            }
         }
         view.configureSoftwareKeyboardMode(softwareKeyboardHeight)
         view.setInputConnection(inputConnection)
@@ -1134,6 +1164,7 @@ class StatusBarController(
      * Updates the emoji picker view inline in the keyboard container.
      */
     private fun updateEmojiPickerView(
+        snapshot: StatusSnapshot,
         inputConnection: android.view.inputmethod.InputConnection? = null,
         softwareKeyboardHeight: Int? = null
     ) {
@@ -1145,20 +1176,55 @@ class StatusBarController(
         val view = emojiPickerView ?: EmojiPickerView(context) {
             onSymCloseRequested?.invoke()
         }.also { emojiPickerView = it }
+        view.onSearchPanelVisibilityChanged = { visible ->
+            onEmojiPickerSearchPanelToggled?.invoke(visible)
+        }
         view.themeOverride = (if (
             mode == Mode.INPUT_VIEW &&
                 SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) == SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
         ) softwareTheme() else hardwareTheme()).toKeyboardThemeColors()
         val wasJustAdded = view.parent !== container
-        if (wasJustAdded) {
-            container.removeAllViews()
-            emojiKeyButtons.clear()
-            container.addView(view)
+        val pickerShownAboveSoftwareKeyboard =
+            softwareKeyboardHeight != null &&
+                view.isSearchPanelShowing() &&
+                showEmojiPickerSearchPopup(
+                    container,
+                    view,
+                    snapshot,
+                    inputConnection,
+                    softwareKeyboardHeight
+                )
+        if (!pickerShownAboveSoftwareKeyboard) {
+            dismissEmojiPickerSearchPopup(view)
+            if (!swappingKeyboardContainerChildren && (wasJustAdded || container.childCount != 1)) {
+                withKeyboardContainerSwap {
+                    view.reorderingWithinContainer {
+                        if (container.getChildAt(0) === view) {
+                            // Unstack without detaching the picker: only remove the
+                            // views stacked below it (e.g. the software keyboard).
+                            while (container.childCount > 1) {
+                                container.removeViewAt(container.childCount - 1)
+                            }
+                        } else {
+                            container.removeAllViews()
+                            emojiKeyButtons.clear()
+                            container.addView(view)
+                        }
+                    }
+                }
+            }
+            view.configureSoftwareKeyboardMode(
+                heightPx = softwareKeyboardHeight,
+                onKeyboardLayoutRequested = if (softwareKeyboardHeight != null) onEmojiPickerRequested else null
+            )
+        } else {
+            // Search active: the main IME window keeps its normal keyboard height. The compact
+            // picker is rendered in a separate window above it, avoiding a Surface resize.
+            view.configureSoftwareKeyboardMode(
+                heightPx = null,
+                onKeyboardLayoutRequested = null
+            )
         }
-        view.configureSoftwareKeyboardMode(
-            heightPx = softwareKeyboardHeight,
-            onKeyboardLayoutRequested = if (softwareKeyboardHeight != null) onEmojiPickerRequested else null
-        )
         view.setInputConnection(inputConnection)
 
         // Only scroll to top when view is just added (first open or switching pages)
@@ -1169,6 +1235,84 @@ class StatusBarController(
             view.scrollToTop() // View was just added (happens when reopening after being removed)
         }
         lastSymPageRendered = 4
+    }
+
+    private fun showEmojiPickerSearchPopup(
+        container: ViewGroup,
+        picker: EmojiPickerView,
+        snapshot: StatusSnapshot,
+        inputConnection: android.view.inputmethod.InputConnection?,
+        softwareKeyboardHeight: Int
+    ): Boolean {
+        val layout = statusBarLayout ?: return false
+        val keyboardView = ensureSoftwareKeyboardViewInstance(container)
+        val keyboardHeight = softwareKeyboardHeight.takeIf { it > 0 }
+            ?: measureSoftwareKeyboardDesiredHeight(keyboardView, layout).takeIf { it > 0 }
+            ?: return false
+        configureSoftwareKeyboard(keyboardView, snapshot, inputConnection, null)
+        if (swappingKeyboardContainerChildren) {
+            keyboardView.visibility = View.VISIBLE
+            return true
+        }
+
+        if (container.childCount != 1 || container.getChildAt(0) !== keyboardView) {
+            withKeyboardContainerSwap {
+                picker.reorderingWithinContainer {
+                    if (picker.parent === container) {
+                        container.removeView(picker)
+                    }
+                    container.removeAllViews()
+                    emojiKeyButtons.clear()
+                    container.addView(
+                        keyboardView,
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            keyboardHeight
+                        )
+                    )
+                }
+            }
+        }
+        keyboardView.visibility = View.VISIBLE
+
+        val popup = emojiPickerSearchPopup ?: PopupWindow(context).apply {
+            isFocusable = false
+            isTouchable = true
+            isOutsideTouchable = false
+            isClippingEnabled = false
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            elevation = 0f
+            animationStyle = 0
+        }.also { emojiPickerSearchPopup = it }
+        if (popup.contentView !== picker) {
+            popup.contentView = picker
+        }
+        popup.width = context.resources.displayMetrics.widthPixels
+        popup.height = EmojiPickerView.configuredHeightPx(context)
+        if (!popup.isShowing && !emojiPickerSearchPopupShowPending) {
+            emojiPickerSearchPopupShowPending = true
+            layout.post {
+                emojiPickerSearchPopupShowPending = false
+                if (picker.isSearchPanelShowing() && !popup.isShowing && layout.isAttachedToWindow) {
+                    popup.showAtLocation(layout, Gravity.BOTTOM, 0, keyboardHeight)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun dismissEmojiPickerSearchPopup(picker: EmojiPickerView) {
+        emojiPickerSearchPopupShowPending = false
+        val popup = emojiPickerSearchPopup ?: return
+        if (popup.isShowing) {
+            picker.reorderingWithinContainer {
+                popup.dismiss()
+            }
+        }
+        if (popup.contentView === picker) {
+            popup.contentView = null
+        }
     }
 
     /**
@@ -1359,6 +1503,15 @@ class StatusBarController(
         lastInputConnectionUsed = inputConnection
     }
 
+    private inline fun <T> withKeyboardContainerSwap(block: () -> T): T {
+        swappingKeyboardContainerChildren = true
+        try {
+            return block()
+        } finally {
+            swappingKeyboardContainerChildren = false
+        }
+    }
+
     private fun updateSoftwareKeyboard(
         snapshot: StatusSnapshot,
         inputConnection: android.view.inputmethod.InputConnection? = null,
@@ -1366,15 +1519,36 @@ class StatusBarController(
     ) {
         val container = emojiKeyboardContainer ?: return
         container.setPadding(0, 0, 0, emojiKeyboardBottomPaddingPx)
-        val uppercase = snapshot.capsLockEnabled || snapshot.shiftPhysicallyPressed || snapshot.shiftOneShot
-        val layoutName = resolveSoftwareKeyboardLayoutName(snapshot)
-            val keyboardView = container.getChildAt(0) as? AospKeyboardView ?: AospKeyboardView(context).also { view ->
-            var parent: ViewGroup? = container
-            while (parent != null) {
-                parent.clipChildren = false
-                parent.clipToPadding = false
-                parent = parent.parent as? ViewGroup
+        val keyboardView = obtainSoftwareKeyboardView(container)
+        configureSoftwareKeyboard(keyboardView, snapshot, inputConnection, symMappings)
+        (keyboardView.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+            if (
+                params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
+                params.height != 0 ||
+                params.weight != 1f
+            ) {
+                params.width = ViewGroup.LayoutParams.MATCH_PARENT
+                params.height = 0
+                params.weight = 1f
+                keyboardView.layoutParams = params
             }
+        }
+        softwareKeyboardShown = true
+        lastSymPageRendered = 0
+        lastInputConnectionUsed = inputConnection
+    }
+
+    /**
+     * Returns the cached software keyboard view, placing it as the container's only child
+     * (weight-based) so it fills the whole surface. Used by the plain software keyboard page.
+     */
+    private fun obtainSoftwareKeyboardView(container: ViewGroup): AospKeyboardView {
+        val view = ensureSoftwareKeyboardViewInstance(container)
+        if (swappingKeyboardContainerChildren || (container.childCount == 1 && container.getChildAt(0) === view)) {
+            view.visibility = View.VISIBLE
+            return view
+        }
+        withKeyboardContainerSwap {
             container.removeAllViews()
             emojiKeyButtons.clear()
             container.addView(
@@ -1386,10 +1560,45 @@ class StatusBarController(
                 )
             )
         }
+        view.visibility = View.VISIBLE
+        return view
+    }
+
+    private fun ensureSoftwareKeyboardViewInstance(container: ViewGroup): AospKeyboardView {
+        return softwareKeyboardView ?: AospKeyboardView(context).also { view ->
+            var parent: ViewGroup? = container
+            while (parent != null) {
+                parent.clipChildren = false
+                parent.clipToPadding = false
+                parent = parent.parent as? ViewGroup
+            }
+            softwareKeyboardView = view
+        }
+    }
+
+    private fun softwareKeyboardSearchTarget(snapshot: StatusSnapshot): EmojiPickerView? {
+        if (snapshot.symPage != 4) return null
+        val picker = emojiPickerView ?: return null
+        if (!picker.isSearchInputActive()) return null
+        return picker
+    }
+
+    private fun configureSoftwareKeyboard(
+        keyboardView: AospKeyboardView,
+        snapshot: StatusSnapshot,
+        inputConnection: android.view.inputmethod.InputConnection?,
+        symMappings: Map<Int, String>?
+    ) {
+        val uppercase = snapshot.capsLockEnabled || snapshot.shiftPhysicallyPressed || snapshot.shiftOneShot
+        val layoutName = resolveSoftwareKeyboardLayoutName(snapshot)
         keyboardView.visibility = View.VISIBLE
         keyboardView.listener = object : AospKeyboardView.Listener {
             override fun onText(text: String) {
                 onSoftwareKeyboardNonShiftInteraction?.invoke()
+                val searchTarget = softwareKeyboardSearchTarget(snapshot)
+                if (searchTarget != null && searchTarget.handleSearchTextInput(text)) {
+                    return
+                }
                 val handled = onSoftwareKeyboardTextInput?.invoke(text, inputConnection, snapshot) == true
                 if (!handled) {
                     inputConnection?.commitText(text, 1)
@@ -1398,12 +1607,21 @@ class StatusBarController(
 
             override fun onBackspace() {
                 onSoftwareKeyboardNonShiftInteraction?.invoke()
+                val searchTarget = softwareKeyboardSearchTarget(snapshot)
+                if (searchTarget != null && searchTarget.handleSearchBackspace()) {
+                    return
+                }
                 inputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
                 inputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
             }
 
             override fun onEnter() {
                 onSoftwareKeyboardNonShiftInteraction?.invoke()
+                val searchTarget = softwareKeyboardSearchTarget(snapshot)
+                if (searchTarget != null) {
+                    searchTarget.commitTopSearchResultAndClose()
+                    return
+                }
                 inputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                 inputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
             }
@@ -1523,21 +1741,6 @@ class StatusBarController(
         keyboardView.longPressLayerPopupBelowKey =
             SettingsManager.getSoftwareKeyboardLongPressLayerPopupBelowKey(context)
         keyboardView.themeOverride = softwareTheme().toAospThemeOverride()
-        (keyboardView.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
-            if (
-                params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
-                params.height != 0 ||
-                params.weight != 1f
-            ) {
-                params.width = ViewGroup.LayoutParams.MATCH_PARENT
-                params.height = 0
-                params.weight = 1f
-                keyboardView.layoutParams = params
-            }
-        }
-        softwareKeyboardShown = true
-        lastSymPageRendered = 0
-        lastInputConnectionUsed = inputConnection
     }
 
     private fun softwareKeyboardLayoutStyle(): AospKeyboardView.SoftwareLayoutStyle =
@@ -1552,8 +1755,10 @@ class StatusBarController(
         val activeColors = softwareTheme()
         emojiKeyboardContainer?.apply {
             setBackgroundColor(activeColors.background)
-            (getChildAt(0) as? AospKeyboardView)?.visibility = View.INVISIBLE
         }
+        // Also covers the stacked layout where the keyboard is not the first container child.
+        (softwareKeyboardView ?: emojiKeyboardContainer?.getChildAt(0) as? AospKeyboardView)
+            ?.visibility = View.INVISIBLE
     }
 
     private data class SoftwareSymKeySpec(
@@ -2726,6 +2931,9 @@ class StatusBarController(
         val isSoftwareKeyboardSymbolPage = isFullSoftwareKeyboardMode && snapshot.symPage in listOf(1, 2, 5)
         val isSoftwareKeyboardOverlayPage =
             isSoftwareKeyboardSymbolPage || isSoftwareKeyboardClipboardPage || isSoftwareKeyboardEmojiPage
+        if (!isSoftwareKeyboardEmojiPage) {
+            dismissEmojiPickerPopup()
+        }
         val activeTheme = activeThemeSettings(isFullSoftwareKeyboardMode)
         val activeColors = activeTheme.toKeyboardThemeColors()
         val softwareThemeSettings = if (isFullSoftwareKeyboardMode) activeTheme else softwareTheme()
@@ -2930,7 +3138,11 @@ class StatusBarController(
                 )
             } else if (snapshot.symPage == 4) {
                 // Show emoji picker view
-                updateEmojiPickerView(inputConnection, softwareKeyboardHeight = lastSoftwareKeyboardHeight.takeIf { isFullSoftwareKeyboardMode && it > 0 })
+                updateEmojiPickerView(
+                    snapshot,
+                    inputConnection,
+                    softwareKeyboardHeight = lastSoftwareKeyboardHeight.takeIf { isFullSoftwareKeyboardMode && it > 0 }
+                )
             } else if (isSoftwareKeyboardSymbolPage && symMappings != null) {
                 updateSoftwareSymbolKeyboard(symMappings, snapshot, inputConnection)
             } else if (symMappings != null) {
@@ -3326,4 +3538,5 @@ class StatusBarController(
             }
         }
     }
+
 }

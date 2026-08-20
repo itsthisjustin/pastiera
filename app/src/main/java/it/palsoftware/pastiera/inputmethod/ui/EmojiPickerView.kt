@@ -40,6 +40,7 @@ import it.palsoftware.pastiera.data.emoji.EmojiSearchRepository
 import android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -72,7 +73,7 @@ class EmojiPickerView(
     private var coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var loadingJob: Job? = null
 
-    private val compactHeight = dpToPx(177f)
+    private val compactHeight = dpToPx(COMPACT_HEIGHT_DP)
     private val emojiSize = dpToPx(48f)
     private val spacing = dpToPx(4f)
     private val smallPadding = dpToPx(8f)
@@ -100,8 +101,11 @@ class EmojiPickerView(
     private var isSearchMode: Boolean = false
     private var isSearchPanelVisible: Boolean = false
     private var searchInputCaptureEnabled: Boolean = true
+    private var containerReordering: Boolean = false
     private var pendingSearchReplacementRange: IntRange? = null
     private var tabCategoryIds: List<String> = emptyList()
+    private var lastSearchResults: List<EmojiSearchRepository.EmojiSearchResult> = emptyList()
+    var onSearchPanelVisibilityChanged: ((Boolean) -> Unit)? = null
     var themeOverride: KeyboardThemeColors? = null
         set(value) {
             if (field == value) {
@@ -202,6 +206,9 @@ class EmojiPickerView(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            // Recents updates must appear silently ("as if the emoji was always there"),
+            // so disable insert/change animations entirely.
+            itemAnimator = null
         }
 
         val gridLayoutManager = GridLayoutManager(context, columns, RecyclerView.VERTICAL, false)
@@ -367,11 +374,7 @@ class EmojiPickerView(
     }
 
     fun configureSoftwareKeyboardMode(heightPx: Int?, onKeyboardLayoutRequested: (() -> Unit)?) {
-        val configuredHeight = if (it.palsoftware.pastiera.SettingsManager.getEmojiPickerExpandedHeight(context)) {
-            (compactHeight * 1.5f).toInt()
-        } else {
-            compactHeight
-        }
+        val configuredHeight = configuredHeightPx(context)
         val targetHeight = heightPx?.takeIf { it > 0 } ?: configuredHeight
         updateHeight(targetHeight)
         keyboardSwitcherButton.visibility = if (onKeyboardLayoutRequested != null) View.VISIBLE else View.GONE
@@ -397,6 +400,58 @@ class EmojiPickerView(
 
     fun isSearchInputActive(): Boolean {
         return isSearchPanelVisible && searchInputCaptureEnabled
+    }
+
+    fun isSearchPanelShowing(): Boolean {
+        return isSearchPanelVisible
+    }
+
+    /**
+     * Routes on-screen keyboard text input into the emoji search field while the
+     * search input capture is active (analogous to the hardware key path).
+     */
+    fun handleSearchTextInput(text: String): Boolean {
+        if (!isSearchInputActive()) return false
+        if (text.isNotEmpty()) {
+            appendSearchText(text)
+        }
+        return true
+    }
+
+    /**
+     * Routes on-screen keyboard backspace into the emoji search field while the
+     * search input capture is active.
+     */
+    fun handleSearchBackspace(): Boolean {
+        if (!isSearchInputActive()) return false
+        deleteSearchTextBackwards()
+        return true
+    }
+
+    /**
+     * Commits the top emoji search result and closes the picker.
+     * Stays neutral when the search input capture is inactive or there are no results.
+     */
+    fun commitTopSearchResultAndClose() {
+        if (!isSearchInputActive()) return
+        val top = lastSearchResults.firstOrNull() ?: return
+        onEmojiSelected(top.entry.base, top.categoryId, closeAfterCommit = true)
+    }
+
+    private fun deleteSearchTextBackwards() {
+        val text = searchField.text ?: return
+        if (text.isEmpty()) return
+        val replacementRange = selectedSearchRange(text.length)
+        val start = replacementRange?.first
+            ?: minOf(searchField.selectionStart, searchField.selectionEnd).coerceAtLeast(0)
+        val end = replacementRange?.last?.plus(1)
+            ?: maxOf(searchField.selectionStart, searchField.selectionEnd).coerceAtMost(text.length)
+        if (start < end) {
+            text.delete(start, end)
+            pendingSearchReplacementRange = null
+        } else {
+            text.delete(text.length - 1, text.length)
+        }
     }
 
     fun createSearchInputConnection(): InputConnection? {
@@ -439,19 +494,7 @@ class EmojiPickerView(
 
         return when (event.keyCode) {
             KeyEvent.KEYCODE_DEL -> {
-                val text = searchField.text ?: return true
-                if (text.isEmpty()) return true
-                val replacementRange = selectedSearchRange(text.length)
-                val start = replacementRange?.first
-                    ?: minOf(searchField.selectionStart, searchField.selectionEnd).coerceAtLeast(0)
-                val end = replacementRange?.last?.plus(1)
-                    ?: maxOf(searchField.selectionStart, searchField.selectionEnd).coerceAtMost(text.length)
-                if (start < end) {
-                    text.delete(start, end)
-                    pendingSearchReplacementRange = null
-                } else {
-                    text.delete(text.length - 1, text.length)
-                }
+                deleteSearchTextBackwards()
                 true
             }
             KeyEvent.KEYCODE_SPACE -> {
@@ -459,7 +502,10 @@ class EmojiPickerView(
                 true
             }
             KeyEvent.KEYCODE_ENTER,
-            KeyEvent.KEYCODE_NUMPAD_ENTER -> true
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                commitTopSearchResultAndClose()
+                true
+            }
             else -> {
                 val typedText = resolveTypedText?.invoke(event) ?: run {
                     val unicode = event.unicodeChar
@@ -756,11 +802,13 @@ class EmojiPickerView(
         if (visible) {
             searchField.requestFocus()
         }
+        onSearchPanelVisibilityChanged?.invoke(visible)
     }
 
     private fun applySearchNow() {
         val query = searchQuery.trim()
         if (query.isEmpty()) {
+            lastSearchResults = emptyList()
             setSearchMode(false)
             emptyView.text = context.getString(R.string.emoji_picker_error)
             emptyView.visibility = View.GONE
@@ -770,6 +818,7 @@ class EmojiPickerView(
 
         val index = searchIndex
         if (index == null) {
+            lastSearchResults = emptyList()
             setSearchMode(true)
             emptyView.text = context.getString(R.string.emoji_picker_error)
             emptyView.visibility = View.VISIBLE
@@ -778,6 +827,7 @@ class EmojiPickerView(
         }
 
         val results = EmojiSearchRepository.search(index, query)
+        lastSearchResults = results
         setSearchMode(true)
         searchAdapter.submitList(results)
         if (results.isEmpty()) {
@@ -897,32 +947,34 @@ class EmojiPickerView(
         }
     }
 
-    private fun onEmojiSelected(emoji: String, categoryId: String) {
+    private fun onEmojiSelected(emoji: String, categoryId: String, closeAfterCommit: Boolean? = null) {
         val inputConnection = currentInputConnection
-        if (
-            SettingsManager.getSymAutoClose(context) &&
-            SettingsManager.getSymAutoCloseOnTouch(context)
-        ) {
-            onCloseRequested?.invoke()
-            post {
-                inputConnection?.commitText(emoji, 1)
-            }
-        } else {
-            inputConnection?.commitText(emoji, 1)
-        }
-        // Save to storage and refresh recents when safe for UX.
-        val requiresNotRecents = categoryId == EmojiRepository.RECENTS_CATEGORY_ID
-        coroutineScope.launch(Dispatchers.IO) {
+        // Recents persistence must survive the SYM auto-close: closing the picker evicts this
+        // view from its container, which cancels coroutineScope; ATOMIC guarantees the write
+        // still runs even when cancellation lands before the coroutine body starts.
+        coroutineScope.launch(Dispatchers.IO, start = CoroutineStart.ATOMIC) {
             val changed = RecentEmojiManager.addRecentEmoji(
                 context,
                 emoji,
                 moveToTopWhenExists = true
             )
             if (changed) {
+                val requiresNotRecents = categoryId == EmojiRepository.RECENTS_CATEGORY_ID
                 withContext(Dispatchers.Main) {
                     requestRecentsRefresh(requireTop = !requiresNotRecents, requireNotRecents = requiresNotRecents)
                 }
             }
+        }
+        // Commit synchronously before closing: a post{} on a view that the close detaches
+        // would only run again when the picker is re-attached (i.e. the next time it opens).
+        inputConnection?.commitText(emoji, 1)
+        val shouldClose = closeAfterCommit
+            ?: (
+                SettingsManager.getSymAutoClose(context) &&
+                    SettingsManager.getSymAutoCloseOnTouch(context)
+                )
+        if (shouldClose) {
+            onCloseRequested?.invoke()
         }
     }
 
@@ -1191,6 +1243,44 @@ class EmojiPickerView(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         coroutineScope.cancel()
+        if (!containerReordering) {
+            // Detach outside a host reorder means the picker actually left the screen
+            // (IME hidden or SYM closed): reopen fresh instead of resuming the search.
+            resetSearchStateQuietly()
+        }
+    }
+
+    /**
+     * Wraps a host-side reordering of this view within its container (remove + re-add in
+     * one step, e.g. stacking the software keyboard below). The transient detach must not
+     * reset the search state.
+     */
+    fun reorderingWithinContainer(block: () -> Unit) {
+        containerReordering = true
+        try {
+            block()
+        } finally {
+            containerReordering = false
+        }
+    }
+
+    private fun resetSearchStateQuietly() {
+        if (!isSearchPanelVisible) {
+            if (searchQuery.isNotEmpty()) {
+                searchQuery = ""
+                lastSearchResults = emptyList()
+                searchField.setText("")
+            }
+            return
+        }
+        // Quiet: no onSearchPanelVisibilityChanged notification, the view is off-screen.
+        isSearchPanelVisible = false
+        searchPanel.visibility = View.GONE
+        searchToggleButton.background = createTabBackground(false)
+        setSearchInputCaptureEnabled(false)
+        searchQuery = ""
+        lastSearchResults = emptyList()
+        searchField.setText("")
     }
 
     private inner class SectionAdapter(private val columns: Int) :
@@ -1440,7 +1530,21 @@ class EmojiPickerView(
     }
 
     companion object {
+        private const val COMPACT_HEIGHT_DP = 177f
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_EMOJI = 1
+
+        fun configuredHeightPx(context: Context): Int {
+            val compactHeight = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                COMPACT_HEIGHT_DP,
+                context.resources.displayMetrics
+            ).toInt()
+            return if (SettingsManager.getEmojiPickerExpandedHeight(context)) {
+                (compactHeight * 1.5f).toInt()
+            } else {
+                compactHeight
+            }
+        }
     }
 }

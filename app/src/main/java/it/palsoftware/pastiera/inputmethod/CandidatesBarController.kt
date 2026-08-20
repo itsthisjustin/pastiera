@@ -113,6 +113,13 @@ class CandidatesBarController(
             inputStatusBar.onEmojiPageRequested = value
             candidatesStatusBar.onEmojiPageRequested = value
         }
+
+    var onEmojiPickerSearchPanelToggled: ((Boolean) -> Unit)? = null
+        set(value) {
+            field = value
+            inputStatusBar.onEmojiPickerSearchPanelToggled = value
+            candidatesStatusBar.onEmojiPickerSearchPanelToggled = value
+        }
     
     var onSymbolsPageRequested: (() -> Unit)? = null
         set(value) {
@@ -281,6 +288,11 @@ class CandidatesBarController(
     fun disableEmojiPickerSearchInputCapture() {
         inputStatusBar.disableEmojiPickerSearchInputCapture()
         candidatesStatusBar.disableEmojiPickerSearchInputCapture()
+    }
+
+    fun dismissEmojiPickerPopups() {
+        inputStatusBar.dismissEmojiPickerPopup()
+        candidatesStatusBar.dismissEmojiPickerPopup()
     }
 
     fun isEmojiPickerSearchInputActive(): Boolean {
