@@ -853,4 +853,13 @@ Nav Mode использует физическое положение клави
     <string name="dynamic_variation_resize_to_content_description">Если включено, динамические элементы заполняют доступную строку в зависимости от их количества. Если выключено, они сохраняют размер слота из ползунка и остаются выровненными слева.</string>
     <string name="keyboard_theme_tab_colors">Цвета</string>
     <string name="keyboard_theme_tab_keys">Клавиши</string>
+
+    <string name="settings_search_hint">Поиск по настройкам</string>
+    <string name="settings_search_no_results">Нет подходящих настроек</string>
+    <string name="settings_link_copy">Копировать ссылку</string>
+    <string name="settings_link_copy_markdown">Копировать Markdown</string>
+    <string name="settings_link_share">Поделиться</string>
+    <string name="settings_link_with_description">С описанием</string>
+    <string name="settings_link_copied_toast">Ссылка скопирована</string>
+    <string name="settings_link_unavailable_toast">Этот параметр недоступен</string>
 </resources>

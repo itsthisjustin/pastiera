@@ -125,6 +125,7 @@ fun AccessibilitySettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp)
+                    .settingRow(SettingLinkIds.ACCESSIBILITY_LIVE_READ)
             ) {
                 Row(
                     modifier = Modifier
@@ -166,6 +167,7 @@ fun AccessibilitySettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(84.dp)
+                    .settingRow(SettingLinkIds.ACCESSIBILITY_READ_SECOND_ROW)
             ) {
                 Row(
                     modifier = Modifier
@@ -207,6 +209,7 @@ fun AccessibilitySettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(84.dp)
+                    .settingRow(SettingLinkIds.ACCESSIBILITY_SUGGESTIONS_DELAY)
             ) {
                 Row(
                     modifier = Modifier
@@ -284,6 +287,7 @@ fun AccessibilitySettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp)
+                    .settingRow(SettingLinkIds.ACCESSIBILITY_BOUNCE_KEYS)
             ) {
                 Row(
                     modifier = Modifier
@@ -368,6 +372,7 @@ fun AccessibilitySettingsScreen(
                 description = stringResource(R.string.settings_accessibility_bounce_keys_character_keys_description),
                 checked = bounceCharacterKeysEnabled,
                 enabled = bounceKeysEnabled,
+                linkId = SettingLinkIds.ACCESSIBILITY_BOUNCE_KEYS_CHARACTER_KEYS,
                 onCheckedChange = { enabled ->
                     bounceCharacterKeysEnabled = enabled
                     SettingsManager.setBounceKeysCharacterKeysEnabled(context, enabled)
@@ -378,6 +383,7 @@ fun AccessibilitySettingsScreen(
                 description = stringResource(R.string.settings_accessibility_bounce_keys_modifier_keys_description),
                 checked = bounceModifierKeysEnabled,
                 enabled = bounceKeysEnabled,
+                linkId = SettingLinkIds.ACCESSIBILITY_BOUNCE_KEYS_MODIFIER_KEYS,
                 onCheckedChange = { enabled ->
                     bounceModifierKeysEnabled = enabled
                     SettingsManager.setBounceKeysModifierKeysEnabled(context, enabled)
@@ -395,6 +401,7 @@ fun AccessibilitySettingsScreen(
                 description = stringResource(R.string.settings_accessibility_bounce_keys_space_description),
                 checked = bounceSpaceEnabled,
                 enabled = bounceKeysEnabled,
+                linkId = SettingLinkIds.ACCESSIBILITY_BOUNCE_KEYS_SPACE,
                 onCheckedChange = { enabled ->
                     bounceSpaceEnabled = enabled
                     SettingsManager.setBounceKeysSpaceEnabled(context, enabled)
@@ -405,6 +412,7 @@ fun AccessibilitySettingsScreen(
                 description = stringResource(R.string.settings_accessibility_bounce_keys_enter_description),
                 checked = bounceEnterEnabled,
                 enabled = bounceKeysEnabled,
+                linkId = SettingLinkIds.ACCESSIBILITY_BOUNCE_KEYS_ENTER,
                 onCheckedChange = { enabled ->
                     bounceEnterEnabled = enabled
                     SettingsManager.setBounceKeysEnterEnabled(context, enabled)
@@ -415,6 +423,7 @@ fun AccessibilitySettingsScreen(
                 description = stringResource(R.string.settings_accessibility_bounce_keys_backspace_description),
                 checked = bounceBackspaceEnabled,
                 enabled = bounceKeysEnabled,
+                linkId = SettingLinkIds.ACCESSIBILITY_BOUNCE_KEYS_BACKSPACE,
                 onCheckedChange = { enabled ->
                     bounceBackspaceEnabled = enabled
                     SettingsManager.setBounceKeysBackspaceEnabled(context, enabled)
@@ -425,6 +434,7 @@ fun AccessibilitySettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 104.dp)
+                    .settingRow(SettingLinkIds.ACCESSIBILITY_OVERLAPPING_KEYS)
             ) {
                 Row(
                     modifier = Modifier
@@ -470,12 +480,14 @@ private fun BounceKeyToggleRow(
     description: String,
     checked: Boolean,
     enabled: Boolean,
+    linkId: String? = null,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(76.dp)
+            .settingRow(linkId)
     ) {
         Row(
             modifier = Modifier

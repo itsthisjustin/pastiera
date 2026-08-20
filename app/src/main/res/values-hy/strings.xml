@@ -853,4 +853,13 @@ Nav Mode-ը օգտագործում է ստեղնի ֆիզիկական դիրքը
     <string name="dynamic_variation_resize_to_content_description">Միացված լինելու դեպքում դինամիկ տարրերը լրացնում են հասանելի շարքը՝ ըստ ցուցադրվող քանակի։ Անջատված լինելու դեպքում դրանք պահում են սահիկի տեղամասի չափը և մնում ձախից հավասարեցված։</string>
     <string name="keyboard_theme_tab_colors">Գույներ</string>
     <string name="keyboard_theme_tab_keys">Ստեղներ</string>
+
+    <string name="settings_search_hint">Որոնել կարգավորումներում</string>
+    <string name="settings_search_no_results">Համընկնող կարգավորումներ չկան</string>
+    <string name="settings_link_copy">Պատճենել հղումը</string>
+    <string name="settings_link_copy_markdown">Պատճենել Markdown-ը</string>
+    <string name="settings_link_share">Կիսվել</string>
+    <string name="settings_link_with_description">Նկարագրությամբ</string>
+    <string name="settings_link_copied_toast">Հղումը պատճենվեց</string>
+    <string name="settings_link_unavailable_toast">Այս կարգավորումը հասանելի չէ</string>
 </resources>

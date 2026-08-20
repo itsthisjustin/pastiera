@@ -1637,4 +1637,59 @@ Each key can be configured as Keycode, Action, Native Ctrl, or None. Use overrid
     <string name="symbol_shortcodes_enable_description">Type :name to search typographic and mathematical symbols.</string>
     <string name="emoji_symbols_close_title">Expand :name:</string>
     <string name="emoji_symbols_close_description">A closing colon expands a unique exact match. Collisions stay selectable.</string>
+
+    <!-- Settings search and shareable setting links -->
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_no_results">No matching settings</string>
+    <string name="settings_link_copy">Copy link</string>
+    <string name="settings_link_copy_markdown">Copy Markdown</string>
+    <string name="settings_link_share">Share</string>
+    <string name="settings_link_with_description">With description</string>
+    <string name="settings_link_copied_toast">Link copied</string>
+    <string name="settings_link_unavailable_toast">This setting is not available</string>
+
+    <!-- Invisible search keywords per settings entry; never rendered, only
+         consumed by the settings search. -->
+    <string name="kw_main_keyboards_devices">keyboards, devices, hardware, bluetooth, physical keyboard, clicks</string>
+    <string name="kw_main_modifiers">LED, LEDs, lights, indicators, shift, ctrl, alt, sym</string>
+    <string name="kw_main_custom_input_styles">keyboard layout, layouts, input styles, languages, per language</string>
+    <string name="kw_main_text_input">typing, text, punctuation, quotes, spacing, capitalization</string>
+    <string name="kw_main_auto_correction">correction, autocorrect, spelling, suggestions, replacements, dictionaries</string>
+    <string name="kw_main_keyboard_theme">theme, themes, colors, dark, light, presets, hardware keyboard, on-screen keyboard, Pastiera Dark, Pastiera Light, Cloud Tap, Moon Tap, Classic Cloud, Classic Midnight</string>
+    <string name="kw_main_app_language">language, app language, locale, translation</string>
+    <string name="kw_main_customization">customize, customization, appearance</string>
+    <string name="kw_main_advanced">advanced, backup, restore, debug, expert</string>
+    <string name="kw_main_accessibility">accessibility, delay, bounce keys, overlapping keys, screen reader</string>
+    <string name="kw_main_about">about, version, support, ko-fi, donate</string>
+    <string name="kw_text_input_auto_space_punctuation">spacing, space, punctuation</string>
+    <string name="kw_text_input_spaced_hyphen">hyphen, dash, en dash, punctuation</string>
+    <string name="kw_text_input_smart_quotes">quotation marks, apostrophe, curly quotes, typography</string>
+    <string name="kw_text_input_shift_backspace">shift, backspace, delete word</string>
+    <string name="kw_text_input_alt_backspace">alt, backspace, delete word</string>
+    <string name="kw_text_input_backspace_start">backspace, delete line, start of text</string>
+    <string name="kw_keyboards_devices_on_screen">on-screen keyboard, software keyboard, virtual keyboard</string>
+    <string name="kw_keyboards_devices_built_in">built-in keyboards, layouts, hardware, profiles</string>
+    <string name="kw_keyboards_devices_accessories">accessories, clicks, cover</string>
+    <string name="kw_auto_correction_languages">keyboard layout, input languages, layouts, dictionaries, per language</string>
+    <string name="kw_auto_correction_suggestions">suggestions, candidates, prediction</string>
+    <string name="kw_auto_correction_accent_matching">accents, diacritics, matching</string>
+    <string name="kw_accessibility_suggestions_delay">delay, suggestions, accessibility, timeout</string>
+    <string name="kw_keyboard_timing_long_press">long press, delay, timing, threshold</string>
+    <string name="kw_advanced_swipe_threshold">swipe, selection, threshold, cursor</string>
+    <string name="kw_modifiers_long_press_modifier">long press, modifier, one-shot</string>
+    <string name="kw_modifiers_long_press_threshold">long press, delay, threshold, modifier</string>
+    <string name="kw_modifier_indicators">LED, LEDs, lights, indicators, where modifier state shows</string>
+    <string name="kw_custom_input_styles_layout_mode">layout mode, per-app, switch</string>
+    <string name="kw_about_support_ko_fi">support, donate, ko-fi, coffee</string>
+    <string name="kw_theme_toggle_show_leds">LED, LEDs, lights, indicators, on-screen keyboard</string>
+    <string name="kw_theme_toggle_distribute_spacing">spacing, gaps, keys</string>
+    <string name="kw_theme_toggle_ortholinear">grid, aligned keys, layout</string>
+    <string name="kw_theme_toggle_attach_popup">popup, bubble, key</string>
+    <string name="kw_theme_toggle_popup_tail">tail, connector, popup</string>
+    <string name="kw_theme_toggle_preview_on_hold">preview, hold, long press</string>
+    <string name="kw_theme_toggle_character_picker">character picker, accents, alternates, symbols</string>
+    <string name="kw_theme_led_colors">LED, LEDs, inactive, active, locked, modifier, colors, indicators</string>
+    <string name="kw_indicator_bottom_strip">LED, LEDs, lights, strip, bottom</string>
+    <string name="kw_indicator_menu_bar">LED, lights, icon, status bar, indicators</string>
+    <string name="kw_indicator_status_bar">LED, lights, symbols, indicators, pastiera</string>
 </resources>

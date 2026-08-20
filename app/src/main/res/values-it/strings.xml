@@ -973,4 +973,70 @@ Ogni tasto può essere configurato come Keycode, Azione, Native Ctrl o Nessuno. 
     <string name="software_keyboard_mode_auto_short">Auto (PKB: hardware, altrimenti virtuale)</string>
     <string name="keyboard_theme_tab_colors">Colori</string>
     <string name="keyboard_theme_tab_keys">Tasti</string>
+
+    <!-- Settings search and shareable setting links -->
+    <string name="settings_search_hint">Cerca nelle impostazioni</string>
+    <string name="settings_search_no_results">Nessuna impostazione corrispondente</string>
+    <string name="settings_link_copy">Copia link</string>
+    <string name="settings_link_copy_markdown">Copia Markdown</string>
+    <string name="settings_link_share">Condividi</string>
+    <string name="settings_link_with_description">Con descrizione</string>
+    <string name="settings_link_copied_toast">Link copiato</string>
+    <string name="settings_link_unavailable_toast">Questa impostazione non è disponibile</string>
+
+    <!-- Traduzioni mancanti per toggle/LED dell'editor temi tastiera -->
+    <string name="keyboard_theme_show_leds">Mostra LED</string>
+    <string name="keyboard_theme_distribute_spacing">Distribuisci la spaziatura</string>
+    <string name="keyboard_theme_ortholinear">Ortolineare</string>
+    <string name="keyboard_theme_attach_popup">Allega popup al tasto</string>
+    <string name="keyboard_theme_popup_tail">Coda del popup</string>
+    <string name="keyboard_theme_preview_on_hold">Anteprima tasto solo tenendo premuto</string>
+    <string name="keyboard_theme_character_picker">Selettore caratteri alla pressione lunga</string>
+    <string name="keyboard_theme_wizard_leds">Colori LED</string>
+    <string name="keyboard_theme_wizard_leds_description">Scegli i colori degli indicatori dei modificatori inattivi, attivi e bloccati.</string>
+
+    <!-- Parole chiave di ricerca invisibili per voce di impostazione; mai
+         renderizzate, usate solo dalla ricerca delle impostazioni. -->
+    <string name="kw_main_keyboards_devices">tastiere, dispositivi, hardware, bluetooth, tastiera fisica, clicks</string>
+    <string name="kw_main_modifiers">LED, luci, indicatori, maiusc, ctrl, alt, sym</string>
+    <string name="kw_main_custom_input_styles">layout tastiera, layout, stili di input, lingue, per lingua</string>
+    <string name="kw_main_text_input">digitazione, testo, punteggiatura, virgolette, spaziatura, maiuscole</string>
+    <string name="kw_main_auto_correction">correzione, correttore automatico, ortografia, suggerimenti, sostituzioni, dizionari</string>
+    <string name="kw_main_keyboard_theme">tema, temi, colori, scuro, chiaro, preset, tastiera fisica, tastiera a schermo, Pastiera Dark, Pastiera Light, Cloud Tap, Moon Tap, Classic Cloud, Classic Midnight</string>
+    <string name="kw_main_app_language">lingua, lingua app, locale, traduzione</string>
+    <string name="kw_main_customization">personalizza, personalizzazione, aspetto</string>
+    <string name="kw_main_advanced">avanzate, backup, ripristino, debug, esperto</string>
+    <string name="kw_main_accessibility">accessibilità, ritardo, bounce keys, tasti sovrapposti, lettore schermo</string>
+    <string name="kw_main_about">informazioni, versione, supporto, ko-fi, donazione</string>
+    <string name="kw_text_input_auto_space_punctuation">spaziatura, spazio, punteggiatura</string>
+    <string name="kw_text_input_spaced_hyphen">trattino, lineetta, punteggiatura</string>
+    <string name="kw_text_input_smart_quotes">virgolette, apostrofo, virgolette tipografiche</string>
+    <string name="kw_text_input_shift_backspace">shift, maiusc, backspace, cancella parola</string>
+    <string name="kw_text_input_alt_backspace">alt, backspace, cancella parola</string>
+    <string name="kw_text_input_backspace_start">backspace, cancella riga, inizio testo</string>
+    <string name="kw_keyboards_devices_on_screen">tastiera a schermo, tastiera virtuale, tastiera software</string>
+    <string name="kw_keyboards_devices_built_in">tastiere integrate, layout, hardware, profili</string>
+    <string name="kw_keyboards_devices_accessories">accessori, clicks, cover</string>
+    <string name="kw_auto_correction_languages">layout tastiera, lingue di input, layout, dizionari, per lingua</string>
+    <string name="kw_auto_correction_suggestions">suggerimenti, candidati, predizione</string>
+    <string name="kw_auto_correction_accent_matching">accenti, segni diacritici, corrispondenza</string>
+    <string name="kw_accessibility_suggestions_delay">ritardo, suggerimenti, accessibilità, timeout</string>
+    <string name="kw_keyboard_timing_long_press">pressione lunga, ritardo, timing, soglia</string>
+    <string name="kw_advanced_swipe_threshold">swipe, selezione, soglia, cursore</string>
+    <string name="kw_modifiers_long_press_modifier">pressione lunga, modificatore, one-shot</string>
+    <string name="kw_modifiers_long_press_threshold">pressione lunga, ritardo, soglia, modificatore</string>
+    <string name="kw_modifier_indicators">LED, luci, indicatori, dove appare lo stato dei modificatori</string>
+    <string name="kw_custom_input_styles_layout_mode">modalità layout, per app, cambio</string>
+    <string name="kw_about_support_ko_fi">supporto, donazione, ko-fi, caffè</string>
+    <string name="kw_theme_toggle_show_leds">LED, luci, indicatori, tastiera a schermo</string>
+    <string name="kw_theme_toggle_distribute_spacing">spaziatura, spazi, tasti</string>
+    <string name="kw_theme_toggle_ortholinear">griglia, tasti allineati, layout</string>
+    <string name="kw_theme_toggle_attach_popup">popup, bolla, tasto</string>
+    <string name="kw_theme_toggle_popup_tail">coda, collegamento, popup</string>
+    <string name="kw_theme_toggle_preview_on_hold">anteprima, tenere premuto, pressione lunga</string>
+    <string name="kw_theme_toggle_character_picker">selettore caratteri, accenti, alternative, simboli</string>
+    <string name="kw_theme_led_colors">LED, inattivo, attivo, bloccato, modificatore, colori, indicatori</string>
+    <string name="kw_indicator_bottom_strip">LED, luci, striscia, in basso</string>
+    <string name="kw_indicator_menu_bar">LED, luci, icona, barra di stato, indicatori</string>
+    <string name="kw_indicator_status_bar">LED, luci, simboli, indicatori, pastiera</string>
 </resources>

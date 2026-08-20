@@ -101,7 +101,20 @@
             android:configChanges="keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:label="@string/settings_title"
-            android:theme="@style/Theme.Pastiera" />
+            android:theme="@style/Theme.Pastiera">
+            <!-- Deep links to individual settings entries (pastiera://setting/<id>).
+                 Opening a link only navigates and highlights, it never changes values. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="pastiera"
+                    android:host="setting" />
+            </intent-filter>
+        </activity>
         
         <!-- Activity per gestire le lingue degli input method subtypes -->
         <activity

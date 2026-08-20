@@ -15,6 +15,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,8 @@ import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import it.palsoftware.pastiera.R
@@ -54,6 +57,7 @@ import it.palsoftware.pastiera.inputmethod.DeviceSpecific
 import it.palsoftware.pastiera.update.checkForUpdate
 import it.palsoftware.pastiera.update.showUpdateDialog
 import it.palsoftware.pastiera.update.shouldUseGithubUpdateChecks
+import kotlinx.coroutines.delay
 
 /**
  * Sealed class per rappresentare lo stato della navigazione nelle settings.
@@ -83,11 +87,13 @@ internal data class SettingsStackEntry(
     val destination: SettingsDestination,
     val customizationDestination: String? = null,
     val keyboardThemeTarget: String? = null,
+    val keyboardThemeTab: String? = null,
     val navModeKeyCode: Int? = null,
     val keyboardsDevicesDestination: KeyboardsDevicesDestination = KeyboardsDevicesDestination.Main
 )
 
-private const val SETTINGS_STACK_SAVER_VERSION = "settings-stack-v2"
+private const val SETTINGS_STACK_SAVER_VERSION = "settings-stack-v3"
+private const val SETTINGS_STACK_SAVER_VERSION_V2 = "settings-stack-v2"
 
 private fun decodeSettingsDestination(value: String): SettingsDestination? =
     runCatching { SettingsDestination.valueOf(value) }.getOrNull()
@@ -95,6 +101,21 @@ private fun decodeSettingsDestination(value: String): SettingsDestination? =
 internal fun restoreSettingsStack(values: List<String>): SnapshotStateList<SettingsStackEntry> {
     val restored = when {
         values.firstOrNull() == SETTINGS_STACK_SAVER_VERSION ->
+            values.drop(1).chunked(6).mapNotNull { chunk ->
+                if (chunk.size != 6) return@mapNotNull null
+                val destination = decodeSettingsDestination(chunk[0]) ?: return@mapNotNull null
+                SettingsStackEntry(
+                    destination = destination,
+                    customizationDestination = chunk[1].ifEmpty { null },
+                    keyboardThemeTarget = chunk[2].ifEmpty { null },
+                    keyboardThemeTab = chunk[3].ifEmpty { null },
+                    navModeKeyCode = chunk[4].ifEmpty { null }?.toIntOrNull(),
+                    keyboardsDevicesDestination = runCatching {
+                        KeyboardsDevicesDestination.valueOf(chunk[5])
+                    }.getOrDefault(KeyboardsDevicesDestination.Main)
+                )
+            }
+        values.firstOrNull() == SETTINGS_STACK_SAVER_VERSION_V2 ->
             values.drop(1).chunked(5).mapNotNull { chunk ->
                 if (chunk.size != 5) return@mapNotNull null
                 val destination = decodeSettingsDestination(chunk[0]) ?: return@mapNotNull null
@@ -135,6 +156,7 @@ private val settingsNavigationStackSaver =
                     entry.destination.name,
                     entry.customizationDestination.orEmpty(),
                     entry.keyboardThemeTarget.orEmpty(),
+                    entry.keyboardThemeTab.orEmpty(),
                     entry.navModeKeyCode?.toString().orEmpty(),
                     entry.keyboardsDevicesDestination.name
                 )
@@ -151,16 +173,35 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     initialDestination: String? = null,
     initialCustomizationDestination: String? = null,
-    initialKeyboardThemeTarget: String? = null
+    initialKeyboardThemeTarget: String? = null,
+    settingLinkRequest: SettingLinkRequest? = null
 ) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
-    
+
     var checkingForUpdates by remember { mutableStateOf(false) }
     var navigationDirection by remember { mutableStateOf(NavigationDirection.Push) }
+    val initialLinkEntry = remember {
+        settingLinkRequest?.id?.let(SettingLinkRegistry::byId)
+    }
+    var highlightSettingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var linkSheetEntry by remember { mutableStateOf<SettingEntry?>(null) }
     val navigationStack = rememberSaveable(saver = settingsNavigationStackSaver) {
         mutableStateListOf<SettingsStackEntry>().apply {
-            when (initialDestination) {
+            val linkEntry = initialLinkEntry
+            if (linkEntry != null) {
+                if (linkEntry.route.destination != SettingsDestination.Main) {
+                    add(SettingsStackEntry(SettingsDestination.Main))
+                }
+                add(
+                    SettingsStackEntry(
+                        destination = linkEntry.route.destination,
+                        customizationDestination = linkEntry.route.customizationDestination,
+                        keyboardThemeTarget = linkEntry.route.keyboardThemeTarget?.name,
+                        keyboardThemeTab = linkEntry.route.keyboardThemeTab?.name
+                    )
+                )
+            } else when (initialDestination) {
                 SettingsActivity.DESTINATION_CUSTOMIZATION -> {
                     if (initialCustomizationDestination == null) {
                         add(SettingsStackEntry(SettingsDestination.Main))
@@ -201,16 +242,23 @@ fun SettingsScreen(
         }
     }
 
-    fun openCustomization(destination: String?, keyboardThemeTarget: String? = null) {
-        if (currentDestination == SettingsDestination.Customization) return
+    fun openCustomization(
+        destination: String?,
+        keyboardThemeTarget: String? = null,
+        keyboardThemeTab: String? = null
+    ) {
         navigationDirection = NavigationDirection.Push
-        navigationStack.add(
-            SettingsStackEntry(
-                destination = SettingsDestination.Customization,
-                customizationDestination = destination,
-                keyboardThemeTarget = keyboardThemeTarget
-            )
+        val target = SettingsStackEntry(
+            destination = SettingsDestination.Customization,
+            customizationDestination = destination,
+            keyboardThemeTarget = keyboardThemeTarget,
+            keyboardThemeTab = keyboardThemeTab
         )
+        if (currentDestination == SettingsDestination.Customization) {
+            navigationStack[navigationStack.lastIndex] = target
+        } else {
+            navigationStack.add(target)
+        }
     }
 
     fun navigateToNavMode(keyCode: Int?) {
@@ -222,6 +270,45 @@ fun SettingsScreen(
                 navModeKeyCode = keyCode
             )
         )
+    }
+
+    /**
+     * Navigates to a settings entry (e.g. from search or a deep link) and asks
+     * its row to flash and scroll into view. Never changes any value.
+     */
+    fun openSettingEntry(entry: SettingEntry) {
+        val visibleEntry = SettingLinkRegistry.visibleTarget(context, entry)
+        val route = visibleEntry.route
+        if (route.destination == SettingsDestination.Customization) {
+            openCustomization(
+                destination = route.customizationDestination,
+                keyboardThemeTarget = route.keyboardThemeTarget?.name,
+                keyboardThemeTab = route.keyboardThemeTab?.name
+            )
+        } else if (currentDestination != route.destination) {
+            navigateTo(route.destination)
+        }
+        highlightSettingId = visibleEntry.id
+    }
+
+    // Deep link (pastiera://setting/<id>) arriving via intent or onNewIntent
+    LaunchedEffect(settingLinkRequest?.serial) {
+        val request = settingLinkRequest ?: return@LaunchedEffect
+        val entry = SettingLinkRegistry.byId(request.id)
+        if (entry == null) {
+            Toast.makeText(context, R.string.settings_link_unavailable_toast, Toast.LENGTH_SHORT)
+                .show()
+        } else {
+            openSettingEntry(entry)
+        }
+    }
+    LaunchedEffect(highlightSettingId) {
+        if (highlightSettingId != null) {
+            // Must outlast the blink sequence in settingRow (~1.65 s) so the
+            // outline fades out gently after the last blink.
+            delay(1800)
+            highlightSettingId = null
+        }
     }
     
     // Automatic update check on screen open (only once, respecting dismissed releases)
@@ -242,7 +329,11 @@ fun SettingsScreen(
     
     // Handle system back button
     BackHandler { navigateBack() }
-    
+
+    CompositionLocalProvider(
+        LocalSettingHighlightId provides highlightSettingId,
+        LocalSettingLinkLongPress provides ({ id -> linkSheetEntry = SettingLinkRegistry.byId(id) })
+    ) {
     AnimatedContent(
         targetState = currentEntry,
         transitionSpec = {
@@ -276,6 +367,7 @@ fun SettingsScreen(
                     context = context,
                     checkingForUpdates = checkingForUpdates,
                     onCheckingForUpdatesChange = { checkingForUpdates = it },
+                    onOpenSettingEntry = { openSettingEntry(it) },
                     onModifiersClick = { navigateTo(SettingsDestination.Modifiers) },
                     onKeyboardsDevicesClick = { navigateTo(SettingsDestination.KeyboardsDevices) },
                     onTextInputClick = { navigateTo(SettingsDestination.TextInput) },
@@ -362,6 +454,7 @@ fun SettingsScreen(
                     onBack = { navigateBack() },
                     initialDestination = entry.customizationDestination,
                     initialKeyboardThemeTarget = entry.keyboardThemeTarget,
+                    initialKeyboardThemeTab = entry.keyboardThemeTab,
                     onOpenModifiers = { navigateTo(SettingsDestination.Modifiers) }
                 )
             }
@@ -417,6 +510,12 @@ fun SettingsScreen(
             }
         }
     }
+    }
+
+    // Share/copy sheet for the settings entry currently being long-pressed
+    linkSheetEntry?.let { entry ->
+        SettingLinkSheet(entry = entry, onDismiss = { linkSheetEntry = null })
+    }
 }
 
 private enum class NavigationDirection {
@@ -445,8 +544,14 @@ private fun SettingsMainScreen(
     onAboutClick: () -> Unit,
     onBackClick: () -> Unit,
     onCustomInputStylesClick: () -> Unit,
-    onAppLanguageClick: () -> Unit
+    onAppLanguageClick: () -> Unit,
+    onOpenSettingEntry: (SettingEntry) -> Unit
 ) {
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val searchResults = remember(searchQuery, context) {
+        SettingLinkRegistry.search(context, searchQuery)
+    }
     Scaffold(
         topBar = {
             Surface(
@@ -481,24 +586,70 @@ private fun SettingsMainScreen(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
+                .consumeWindowInsets(paddingValues)
+                .imePadding()
         ) {
+            SettingsSearchField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            if (searchQuery.isNotBlank()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (searchResults.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.settings_search_no_results),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        )
+                    } else {
+                        searchResults.forEach { entry ->
+                            SettingSearchResultRow(
+                                entry = entry,
+                                onClick = {
+                                    keyboardController?.hide()
+                                    searchQuery = ""
+                                    onOpenSettingEntry(entry)
+                                }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            } else {
+                Column(
+                    modifier = modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
             SettingsGroupDivider(stringResource(R.string.settings_group_typing))
 
             SettingsCategoryRow(
                 icon = Icons.Filled.Keyboard,
                 title = stringResource(R.string.keyboards_devices_title),
+                linkId = SettingLinkIds.MAIN_KEYBOARDS_DEVICES,
                 onClick = onKeyboardsDevicesClick
             )
             SettingsCategoryRow(
                 iconRes = R.drawable.modifier_keys_24,
                 title = stringResource(R.string.modifiers_title),
                 description = stringResource(R.string.modifiers_description),
+                linkId = SettingLinkIds.MAIN_MODIFIERS,
                 onClick = onModifiersClick
             )
             SettingsCategoryRow(
                 icon = Icons.Filled.Language,
                 title = stringResource(R.string.custom_input_styles_title),
+                linkId = SettingLinkIds.MAIN_CUSTOM_INPUT_STYLES,
                 onClick = onCustomInputStylesClick
             )
 
@@ -507,11 +658,13 @@ private fun SettingsMainScreen(
             SettingsCategoryRow(
                 icon = Icons.Filled.TextFields,
                 title = stringResource(R.string.settings_category_text_input),
+                linkId = SettingLinkIds.MAIN_TEXT_INPUT,
                 onClick = onTextInputClick
             )
             SettingsCategoryRow(
                 icon = Icons.Filled.Spellcheck,
                 title = stringResource(R.string.settings_category_auto_correction),
+                linkId = SettingLinkIds.MAIN_AUTO_CORRECTION,
                 onClick = onAutoCorrectionClick
             )
 
@@ -520,23 +673,27 @@ private fun SettingsMainScreen(
             SettingsCategoryRow(
                 icon = Icons.Filled.Palette,
                 title = stringResource(R.string.keyboard_theme_title),
+                linkId = SettingLinkIds.MAIN_KEYBOARD_THEME,
                 onClick = onKeyboardThemeClick
             )
             SettingsCategoryRow(
                 icon = ImageVector.vectorResource(R.drawable.translate_24),
                 title = stringResource(R.string.app_language_title),
                 description = currentAppLanguageLabel(context),
+                linkId = SettingLinkIds.MAIN_APP_LANGUAGE,
                 onClick = onAppLanguageClick
             )
             SettingsCategoryRow(
                 icon = Icons.Filled.SmartButton,
                 title = stringResource(R.string.status_bar_buttons_title),
                 description = stringResource(R.string.status_bar_buttons_description),
+                linkId = SettingLinkIds.MAIN_STATUS_BAR_BUTTONS,
                 onClick = onStatusBarButtonsClick
             )
             SettingsCategoryRow(
                 icon = Icons.Filled.Tune,
                 title = stringResource(R.string.settings_category_customization),
+                linkId = SettingLinkIds.MAIN_CUSTOMIZATION,
                 onClick = onCustomizationClick
             )
 
@@ -546,18 +703,21 @@ private fun SettingsMainScreen(
                 icon = Icons.AutoMirrored.Filled.ManageSearch,
                 title = stringResource(R.string.starter_launcher_shortcuts_title),
                 description = stringResource(R.string.starter_launcher_shortcuts_description),
+                linkId = SettingLinkIds.MAIN_LAUNCHER_SHORTCUTS,
                 onClick = onQuickLauncherClick
             )
             SettingsCategoryRow(
                 icon = ImageVector.vectorResource(R.drawable.navigation_24),
                 title = stringResource(R.string.nav_mode_title),
                 description = stringResource(R.string.settings_nav_mode_configure),
+                linkId = SettingLinkIds.MAIN_NAV_MODE,
                 onClick = onNavModeClick
             )
             SettingsCategoryRow(
                 icon = Icons.AutoMirrored.Filled.KeyboardReturn,
                 title = stringResource(R.string.app_enter_behaviour_title),
                 description = stringResource(R.string.app_enter_behaviour_description),
+                linkId = SettingLinkIds.MAIN_APP_ENTER_BEHAVIOR,
                 onClick = onEnterBehaviorClick
             )
 
@@ -566,11 +726,13 @@ private fun SettingsMainScreen(
             SettingsCategoryRow(
                 icon = Icons.Filled.Engineering,
                 title = stringResource(R.string.settings_category_advanced),
+                linkId = SettingLinkIds.MAIN_ADVANCED,
                 onClick = onAdvancedClick
             )
             SettingsCategoryRow(
                 icon = Icons.Filled.TouchApp,
                 title = stringResource(R.string.settings_category_accessibility),
+                linkId = SettingLinkIds.MAIN_ACCESSIBILITY,
                 onClick = onAccessibilityClick
             )
 
@@ -583,6 +745,7 @@ private fun SettingsMainScreen(
                     R.string.settings_about_version_summary,
                     BuildConfig.VERSION_NAME
                 ),
+                linkId = SettingLinkIds.MAIN_ABOUT,
                 onClick = onAboutClick
             )
 
@@ -623,10 +786,12 @@ private fun SettingsMainScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
     }
+}
 
 @Composable
 private fun SettingsCategoryRow(
@@ -635,13 +800,14 @@ private fun SettingsCategoryRow(
     title: String,
     description: String? = null,
     enabled: Boolean = true,
+    linkId: String? = null,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(if (description == null) 56.dp else 64.dp)
-            .clickable(enabled = enabled, onClick = onClick)
+            .settingRow(linkId?.takeIf { enabled }, onClick.takeIf { enabled })
     ) {
         Row(
             modifier = Modifier

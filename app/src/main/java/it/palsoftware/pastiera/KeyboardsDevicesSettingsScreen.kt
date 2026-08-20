@@ -166,6 +166,7 @@ private fun KeyboardsDevicesMainScreen(
                 title = stringResource(R.string.keyboard_switching_auto_title),
                 description = stringResource(R.string.keyboard_switching_auto_description),
                 checked = autoEnabled,
+                linkId = SettingLinkIds.KEYBOARDS_DEVICES_KEYBOARD_SWITCHING_AUTO,
                 onCheckedChange = { enabled ->
                     val newMode = if (enabled) {
                         SettingsManager.SoftwareKeyboardMode.AUTO
@@ -196,12 +197,14 @@ private fun KeyboardsDevicesMainScreen(
                 title = shortcut?.let { stringResource(R.string.keyboard_switching_override_shortcut, it) }
                     ?: stringResource(R.string.keyboard_switching_shortcut_unassigned),
                 description = stringResource(R.string.keyboard_switching_override_description),
+                linkId = SettingLinkIds.KEYBOARDS_DEVICES_KEYBOARD_SWITCHING_SHORTCUT,
                 onClick = { onNavModeSettingsClick(shortcutKeyCode) }
             )
             SwitchRow(
                 title = stringResource(R.string.software_keyboard_mode_toggle_toasts_title),
                 description = stringResource(R.string.software_keyboard_mode_toggle_toasts_description),
                 checked = showToggleToasts,
+                linkId = SettingLinkIds.KEYBOARDS_DEVICES_TOGGLE_TOASTS,
                 onCheckedChange = {
                     showToggleToasts = it
                     SettingsManager.setSoftwareKeyboardModeToggleToastsEnabled(context, it)
@@ -213,12 +216,14 @@ private fun KeyboardsDevicesMainScreen(
                 icon = Icons.Filled.Keyboard,
                 title = stringResource(R.string.on_screen_keyboard_title),
                 description = if (isVirtual) stringResource(R.string.keyboard_source_active) else stringResource(R.string.keyboard_source_standby),
+                linkId = SettingLinkIds.KEYBOARDS_DEVICES_ON_SCREEN_KEYBOARD,
                 onClick = onOnScreen
             )
             NavigationRow(
                 icon = Icons.Filled.PhoneAndroid,
                 title = stringResource(R.string.built_in_keyboards_title),
                 description = if (builtInDetected) stringResource(R.string.keyboard_source_device_bound_detected) else stringResource(R.string.keyboard_source_device_bound),
+                linkId = SettingLinkIds.KEYBOARDS_DEVICES_BUILT_IN_KEYBOARDS,
                 onClick = onBuiltIn
             )
             NavigationRow(
@@ -230,6 +235,7 @@ private fun KeyboardsDevicesMainScreen(
                 } else {
                     stringResource(R.string.keyboard_accessory_clicks_disconnected)
                 },
+                linkId = SettingLinkIds.KEYBOARDS_DEVICES_KEYBOARD_ACCESSORIES,
                 onClick = onPowerKeyboard
             )
 
@@ -276,8 +282,14 @@ private fun SectionDivider(title: String) {
 }
 
 @Composable
-private fun NavigationRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, description: String, onClick: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+private fun NavigationRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    linkId: String? = null,
+    onClick: () -> Unit
+) {
+    Surface(Modifier.fillMaxWidth().settingRow(linkId, onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -294,8 +306,14 @@ private fun NavigationRow(icon: androidx.compose.ui.graphics.vector.ImageVector,
 }
 
 @Composable
-private fun SwitchRow(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Surface(Modifier.fillMaxWidth()) {
+private fun SwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    linkId: String? = null,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Surface(Modifier.fillMaxWidth().settingRow(linkId)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)

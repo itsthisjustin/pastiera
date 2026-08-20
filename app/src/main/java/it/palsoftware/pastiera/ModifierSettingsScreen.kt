@@ -1,7 +1,6 @@
 package it.palsoftware.pastiera
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -124,6 +123,7 @@ fun ModifierSettingsScreen(
             ModifierDropdownRow(
                 title = stringResource(R.string.long_press_modifier_title),
                 value = longPressOptions.firstOrNull { it.first == longPressModifier }?.second.orEmpty(),
+                linkId = SettingLinkIds.MODIFIERS_LONG_PRESS_MODIFIER,
                 expanded = longPressExpanded,
                 onExpand = { longPressExpanded = true },
                 onDismiss = { longPressExpanded = false },
@@ -136,6 +136,7 @@ fun ModifierSettingsScreen(
             )
             ModifierLongPressThresholdRow(
                 threshold = longPressThreshold,
+                linkId = SettingLinkIds.MODIFIERS_LONG_PRESS_THRESHOLD,
                 onThresholdChanged = { threshold ->
                     longPressThreshold = threshold
                     SettingsManager.setLongPressThreshold(context, threshold)
@@ -143,7 +144,11 @@ fun ModifierSettingsScreen(
             )
 
             SettingsSectionDivider(stringResource(R.string.modifiers_section_indicators))
-            Surface(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .settingRow(SettingLinkIds.MODIFIERS_INDICATORS)
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -169,12 +174,14 @@ fun ModifierSettingsScreen(
                 iconRes = R.drawable.ic_emoji_symbols_24,
                 title = stringResource(R.string.sym_customization_title),
                 description = stringResource(R.string.sym_customization_description),
+                linkId = SettingLinkIds.MODIFIERS_SYM_LAYERS,
                 onClick = onOpenSymLayers
             )
             ModifierNavigationRow(
                 iconRes = R.drawable.ic_search_24,
                 title = stringResource(R.string.power_shortcuts_title),
                 description = stringResource(R.string.power_shortcuts_description),
+                linkId = SettingLinkIds.MODIFIERS_SYM_SHORTCUTS,
                 onClick = onOpenSymShortcuts,
                 onInfoClick = { showSymShortcutCompatibilityInfo = true }
             )
@@ -185,6 +192,7 @@ fun ModifierSettingsScreen(
                 description = stringResource(R.string.alt_binding_description),
                 value = altBindingOptions.firstOrNull { it.first == altBinding }?.second
                     ?: altBindingOptions.first().second,
+                linkId = SettingLinkIds.MODIFIERS_ALT_BINDING,
                 expanded = altBindingExpanded,
                 onExpand = { altBindingExpanded = true },
                 onDismiss = { altBindingExpanded = false },
@@ -199,6 +207,7 @@ fun ModifierSettingsScreen(
                 iconRes = R.drawable.keyboard_option_key_24,
                 title = stringResource(R.string.alt_key_shortcuts_title),
                 description = stringResource(R.string.alt_key_shortcuts_modifier_link_description),
+                linkId = SettingLinkIds.MODIFIERS_ALT_KEY_SHORTCUTS,
                 onClick = onOpenSymShortcuts
             )
 
@@ -207,6 +216,7 @@ fun ModifierSettingsScreen(
                 iconRes = R.drawable.navigation_24,
                 title = stringResource(R.string.modifier_control_nav_mode_title),
                 description = stringResource(R.string.modifier_control_nav_mode_description),
+                linkId = SettingLinkIds.MODIFIERS_CONTROL_NAV_MODE,
                 onClick = onOpenNavMode
             )
 
@@ -214,7 +224,8 @@ fun ModifierSettingsScreen(
             ModifierSwitchRow(
                 title = stringResource(R.string.shift_tap_latches_title),
                 description = stringResource(R.string.shift_tap_latches_description),
-                checked = shiftTapLatches
+                checked = shiftTapLatches,
+                linkId = SettingLinkIds.MODIFIERS_SHIFT_TAP_LATCHES
             ) {
                 shiftTapLatches = it
                 SettingsManager.setShiftTapLatches(context, it)
@@ -222,7 +233,8 @@ fun ModifierSettingsScreen(
             ModifierSwitchRow(
                 title = stringResource(R.string.alt_tap_latches_title),
                 description = stringResource(R.string.alt_tap_latches_description),
-                checked = altTapLatches
+                checked = altTapLatches,
+                linkId = SettingLinkIds.MODIFIERS_ALT_TAP_LATCHES
             ) {
                 altTapLatches = it
                 SettingsManager.setAltTapLatches(context, it)
@@ -231,7 +243,8 @@ fun ModifierSettingsScreen(
                 title = stringResource(R.string.alt_latch_stays_on_space_title),
                 description = stringResource(R.string.alt_latch_stays_on_space_description),
                 checked = altLatchStaysOnSpace,
-                indent = true
+                indent = true,
+                linkId = SettingLinkIds.MODIFIERS_ALT_LATCH_STAYS_ON_SPACE
             ) {
                 altLatchStaysOnSpace = it
                 SettingsManager.setAltLatchStaysOnSpace(context, it)
@@ -239,7 +252,8 @@ fun ModifierSettingsScreen(
             ModifierSwitchRow(
                 title = stringResource(R.string.ctrl_tap_latches_title),
                 description = stringResource(R.string.ctrl_tap_latches_description),
-                checked = ctrlTapLatches
+                checked = ctrlTapLatches,
+                linkId = SettingLinkIds.MODIFIERS_CTRL_TAP_LATCHES
             ) {
                 ctrlTapLatches = it
                 SettingsManager.setCtrlTapLatches(context, it)
@@ -249,7 +263,8 @@ fun ModifierSettingsScreen(
                     title = stringResource(R.string.ctrl_latch_stays_on_space_title),
                     description = stringResource(R.string.ctrl_latch_stays_on_space_description),
                     checked = ctrlLatchStaysOnSpace,
-                    indent = true
+                    indent = true,
+                    linkId = SettingLinkIds.MODIFIERS_CTRL_LATCH_STAYS_ON_SPACE
                 ) {
                     ctrlLatchStaysOnSpace = it
                     SettingsManager.setCtrlLatchStaysOnSpace(context, it)
@@ -277,9 +292,10 @@ fun ModifierSettingsScreen(
 @Composable
 private fun ModifierLongPressThresholdRow(
     threshold: Long,
+    linkId: String? = null,
     onThresholdChanged: (Long) -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxWidth()) {
+    Surface(modifier = Modifier.fillMaxWidth().settingRow(linkId)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -326,10 +342,11 @@ private fun ModifierNavigationRow(
     iconRes: Int,
     title: String,
     description: String,
+    linkId: String? = null,
     onClick: () -> Unit,
     onInfoClick: (() -> Unit)? = null
 ) {
-    Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    Surface(modifier = Modifier.fillMaxWidth().settingRow(linkId, onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -372,6 +389,7 @@ private fun ModifierNavigationRow(
 private fun <T> ModifierDropdownRow(
     title: String,
     value: String,
+    linkId: String? = null,
     expanded: Boolean,
     onExpand: () -> Unit,
     onDismiss: () -> Unit,
@@ -379,7 +397,7 @@ private fun <T> ModifierDropdownRow(
     onSelected: (T) -> Unit,
     description: String? = null
 ) {
-    Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onExpand)) {
+    Surface(modifier = Modifier.fillMaxWidth().settingRow(linkId, onExpand)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -409,9 +427,10 @@ private fun ModifierSwitchRow(
     description: String,
     checked: Boolean,
     indent: Boolean = false,
+    linkId: String? = null,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+    Surface(modifier = Modifier.fillMaxWidth().height(64.dp).settingRow(linkId)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = if (indent) 52.dp else 16.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,

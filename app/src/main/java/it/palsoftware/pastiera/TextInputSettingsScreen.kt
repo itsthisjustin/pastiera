@@ -309,6 +309,7 @@ fun TextInputSettingsScreen(
             SettingsNavigationRow(
                 title = stringResource(R.string.text_expansion_title),
                 description = stringResource(R.string.text_expansion_description),
+                linkId = SettingLinkIds.TEXT_INPUT_TEXT_EXPANSION,
                 onClick = { showTextExpansion = true }
             )
 
@@ -317,6 +318,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.auto_capitalize_title),
                 description = stringResource(R.string.auto_capitalize_description),
                 checked = autoCapitalizeFirstLetter,
+                linkId = SettingLinkIds.TEXT_INPUT_AUTO_CAPITALIZE,
                 onCheckedChange = { enabled ->
                     autoCapitalizeFirstLetter = enabled
                     SettingsManager.setAutoCapitalizeFirstLetter(context, enabled)
@@ -329,6 +331,7 @@ fun TextInputSettingsScreen(
                         description = stringResource(R.string.auto_capitalize_respect_manual_shift_off_description),
                         checked = autoCapitalizeRespectManualShiftOff,
                         inset = 52.dp,
+                        linkId = SettingLinkIds.TEXT_INPUT_AUTO_CAPITALIZE_RESPECT_MANUAL_SHIFT_OFF,
                         onCheckedChange = { enabled ->
                             autoCapitalizeRespectManualShiftOff = enabled
                             SettingsManager.setAutoCapitalizeRespectManualShiftOff(context, enabled)
@@ -339,6 +342,7 @@ fun TextInputSettingsScreen(
                         description = stringResource(R.string.auto_capitalize_restricted_fields_description),
                         checked = autoCapitalizeRestrictedFields,
                         inset = 52.dp,
+                        linkId = SettingLinkIds.TEXT_INPUT_AUTO_CAPITALIZE_RESTRICTED_FIELDS,
                         onCheckedChange = { enabled ->
                             autoCapitalizeRestrictedFields = enabled
                             SettingsManager.setAutoCapitalizeRestrictedFields(context, enabled)
@@ -350,6 +354,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.auto_capitalize_after_period_title),
                 description = stringResource(R.string.auto_capitalize_after_period_description),
                 checked = autoCapitalizeAfterPeriod,
+                linkId = SettingLinkIds.TEXT_INPUT_AUTO_CAPITALIZE_AFTER_PERIOD,
                 onCheckedChange = { enabled ->
                     autoCapitalizeAfterPeriod = enabled
                     SettingsManager.setAutoCapitalizeAfterPeriod(context, enabled)
@@ -361,6 +366,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.double_space_to_period_title),
                 description = stringResource(R.string.double_space_to_period_description),
                 checked = doubleSpaceToPeriod,
+                linkId = SettingLinkIds.TEXT_INPUT_DOUBLE_SPACE_TO_PERIOD,
                 onCheckedChange = { enabled ->
                     doubleSpaceToPeriod = enabled
                     SettingsManager.setDoubleSpaceToPeriod(context, enabled)
@@ -375,12 +381,14 @@ fun TextInputSettingsScreen(
                     afterLabel = stringResource(R.string.auto_space_punctuation_after_column),
                     offLabel = stringResource(R.string.auto_space_punctuation_choose_off)
                 ),
+                linkId = SettingLinkIds.TEXT_INPUT_AUTO_SPACE_PUNCTUATION,
                 onClick = { autoSpacePunctuationDialogVisible = true }
             )
             SettingsSwitchRow(
                 title = stringResource(R.string.comma_space_title),
                 description = stringResource(R.string.comma_space_description),
                 checked = commaSpace,
+                linkId = SettingLinkIds.TEXT_INPUT_COMMA_SPACE,
                 onCheckedChange = { enabled ->
                     commaSpace = enabled
                     SettingsManager.setCommaSpace(context, enabled)
@@ -390,6 +398,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.french_punctuation_spacing_title),
                 description = stringResource(R.string.french_punctuation_spacing_description),
                 checked = frenchPunctuationSpacing,
+                linkId = SettingLinkIds.TEXT_INPUT_FRENCH_PUNCTUATION_SPACING,
                 onCheckedChange = { enabled ->
                     frenchPunctuationSpacing = enabled
                     SettingsManager.setFrenchPunctuationSpacing(context, enabled)
@@ -401,6 +410,7 @@ fun TextInputSettingsScreen(
                     description = stringResource(R.string.french_punctuation_only_french_description),
                     checked = frenchPunctuationOnlyFrenchLayouts,
                     inset = 52.dp,
+                    linkId = SettingLinkIds.TEXT_INPUT_FRENCH_PUNCTUATION_ONLY_FRENCH,
                     onCheckedChange = { enabled ->
                         frenchPunctuationOnlyFrenchLayouts = enabled
                         SettingsManager.setFrenchPunctuationOnlyFrenchLayouts(context, enabled)
@@ -412,6 +422,7 @@ fun TextInputSettingsScreen(
             SettingsDropdownSwitchRow(
                 title = stringResource(R.string.spaced_hyphen_to_en_dash_title),
                 checked = spacedHyphenToEnDash,
+                linkId = SettingLinkIds.TEXT_INPUT_SPACED_HYPHEN_TO_EN_DASH,
                 onCheckedChange = { enabled ->
                     spacedHyphenToEnDash = enabled
                     SettingsManager.setSpacedHyphenToEnDash(context, enabled)
@@ -434,6 +445,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.mid_word_quote_to_apostrophe_title),
                 description = stringResource(R.string.mid_word_quote_to_apostrophe_description),
                 checked = midWordQuoteToApostrophe,
+                linkId = SettingLinkIds.TEXT_INPUT_MID_WORD_QUOTE_TO_APOSTROPHE,
                 onCheckedChange = { enabled ->
                     midWordQuoteToApostrophe = enabled
                     SettingsManager.setMidWordQuoteToApostrophe(context, enabled)
@@ -442,6 +454,7 @@ fun TextInputSettingsScreen(
             SettingsDropdownSwitchRow(
                 title = stringResource(R.string.smart_quotes_title),
                 checked = smartQuotes,
+                linkId = SettingLinkIds.TEXT_INPUT_SMART_QUOTES,
                 onCheckedChange = { enabled ->
                     smartQuotes = enabled
                     SettingsManager.setSmartQuotes(context, enabled)
@@ -466,6 +479,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.clear_alt_on_space_title),
                 description = stringResource(R.string.clear_alt_on_space_description),
                 checked = clearAltOnSpace,
+                linkId = SettingLinkIds.TEXT_INPUT_CLEAR_ALT_ON_SPACE,
                 onCheckedChange = { enabled ->
                     clearAltOnSpace = enabled
                     SettingsManager.setClearAltOnSpace(context, enabled)
@@ -475,6 +489,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.auto_show_keyboard_title),
                 description = stringResource(R.string.auto_show_keyboard_description),
                 checked = autoShowKeyboard,
+                linkId = SettingLinkIds.TEXT_INPUT_AUTO_SHOW_KEYBOARD,
                 onCheckedChange = { enabled ->
                     autoShowKeyboard = enabled
                     SettingsManager.setAutoShowKeyboard(context, enabled)
@@ -484,6 +499,7 @@ fun TextInputSettingsScreen(
                 title = stringResource(R.string.alt_ctrl_speech_shortcut_title),
                 description = stringResource(R.string.alt_ctrl_speech_shortcut_description),
                 checked = altCtrlSpeechShortcut,
+                linkId = SettingLinkIds.TEXT_INPUT_ALT_CTRL_SPEECH_SHORTCUT,
                 onCheckedChange = { enabled ->
                     altCtrlSpeechShortcut = enabled
                     SettingsManager.setAltCtrlSpeechShortcutEnabled(context, enabled)
@@ -509,7 +525,9 @@ fun TextInputSettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .settingRow(SettingLinkIds.TEXT_INPUT_SHIFT_BACKSPACE_DELETE),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -530,7 +548,9 @@ fun TextInputSettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .settingRow(SettingLinkIds.TEXT_INPUT_ALT_BACKSPACE_DELETE),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -551,7 +571,9 @@ fun TextInputSettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .settingRow(SettingLinkIds.TEXT_INPUT_BACKSPACE_AT_START_DELETE),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -582,6 +604,7 @@ fun TextInputSettingsScreen(
                         title = stringResource(R.string.delete_alternatives_nav_mode_title),
                         description = stringResource(R.string.settings_nav_mode_configure),
                         iconInset = 0.dp,
+                        linkId = SettingLinkIds.TEXT_INPUT_DELETE_NAV_MODE,
                         onClick = onNavModeSettingsClick
                     )
                     Spacer(modifier = Modifier.height(6.dp))
@@ -654,9 +677,14 @@ private fun SettingsSwitchRow(
     description: String? = null,
     checked: Boolean,
     inset: androidx.compose.ui.unit.Dp = 16.dp,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    linkId: String? = null
 ) {
-    SettingsRowFrame(inset = inset, minHeight = if (description == null) 64.dp else 72.dp) {
+    SettingsRowFrame(
+        modifier = Modifier.settingRow(linkId),
+        inset = inset,
+        minHeight = if (description == null) 64.dp else 72.dp
+    ) {
         Icon(
             imageVector = Icons.Filled.TextFields,
             contentDescription = null,
@@ -691,10 +719,11 @@ private fun SettingsNavigationRow(
     title: String,
     description: String,
     iconInset: androidx.compose.ui.unit.Dp = 16.dp,
+    linkId: String? = null,
     onClick: () -> Unit
 ) {
     SettingsRowFrame(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.settingRow(linkId, onClick),
         minHeight = 72.dp,
         inset = iconInset
     ) {
@@ -738,9 +767,13 @@ private fun SettingsDropdownSwitchRow(
     value: String,
     options: List<String>,
     optionLabel: (String) -> String,
-    onOptionSelected: (String) -> Unit
+    onOptionSelected: (String) -> Unit,
+    linkId: String? = null
 ) {
-    SettingsRowFrame(minHeight = 88.dp) {
+    SettingsRowFrame(
+        modifier = Modifier.settingRow(linkId),
+        minHeight = 88.dp
+    ) {
         Icon(
             imageVector = Icons.Filled.TextFields,
             contentDescription = null,

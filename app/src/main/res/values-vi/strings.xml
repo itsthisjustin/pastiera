@@ -853,4 +853,13 @@ Mỗi phím có thể cấu hình là Keycode, Action, Native Ctrl hoặc None. 
     <string name="dynamic_variation_resize_to_content_description">Khi bật, các mục động lấp đầy hàng còn trống dựa trên số mục đang hiển thị. Khi tắt, chúng giữ kích thước ô từ thanh trượt và căn trái.</string>
     <string name="keyboard_theme_tab_colors">Màu sắc</string>
     <string name="keyboard_theme_tab_keys">Phím</string>
+
+    <string name="settings_search_hint">Tìm trong cài đặt</string>
+    <string name="settings_search_no_results">Không có cài đặt phù hợp</string>
+    <string name="settings_link_copy">Sao chép liên kết</string>
+    <string name="settings_link_copy_markdown">Sao chép Markdown</string>
+    <string name="settings_link_share">Chia sẻ</string>
+    <string name="settings_link_with_description">Kèm mô tả</string>
+    <string name="settings_link_copied_toast">Đã sao chép liên kết</string>
+    <string name="settings_link_unavailable_toast">Cài đặt này không khả dụng</string>
 </resources>

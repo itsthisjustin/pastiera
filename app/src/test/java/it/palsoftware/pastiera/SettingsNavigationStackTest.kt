@@ -43,6 +43,40 @@ class SettingsNavigationStackTest {
     }
 
     @Test
+    fun restoresVersionTwoStackWithoutThemeTab() {
+        val stack = restoreSettingsStack(
+            listOf(
+                "settings-stack-v2",
+                "KeyboardsDevices",
+                "",
+                "",
+                "",
+                KeyboardsDevicesDestination.OnScreen.name
+            )
+        )
+
+        assertEquals(KeyboardsDevicesDestination.OnScreen, stack.single().keyboardsDevicesDestination)
+        assertEquals(null, stack.single().keyboardThemeTab)
+    }
+
+    @Test
+    fun restoresVersionThreeThemeTab() {
+        val stack = restoreSettingsStack(
+            listOf(
+                "settings-stack-v3",
+                "Customization",
+                SettingsActivity.CUSTOMIZATION_DESTINATION_KEYBOARD_THEME,
+                SettingsManager.KeyboardThemeTarget.SOFTWARE.name,
+                KeyboardThemeEditorTab.Keys.name,
+                "",
+                KeyboardsDevicesDestination.Main.name
+            )
+        )
+
+        assertEquals(KeyboardThemeEditorTab.Keys.name, stack.single().keyboardThemeTab)
+    }
+
+    @Test
     fun malformedStackFallsBackToMain() {
         val stack = restoreSettingsStack(listOf("broken", "state"))
 

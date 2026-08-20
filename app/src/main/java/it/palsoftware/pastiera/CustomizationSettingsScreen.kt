@@ -81,6 +81,7 @@ fun CustomizationSettingsScreen(
     onBack: () -> Unit,
     initialDestination: String? = null,
     initialKeyboardThemeTarget: String? = null,
+    initialKeyboardThemeTab: String? = null,
     onOpenModifiers: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -586,10 +587,21 @@ fun CustomizationSettingsScreen(
                 KeyboardThemeScreen(
                     modifier = modifier,
                     onBack = { navigateBack() },
-                    initialTarget = when (initialKeyboardThemeTarget) {
-                        SettingsActivity.KEYBOARD_THEME_TARGET_SOFTWARE ->
+                    initialTarget = when {
+                        initialKeyboardThemeTarget.equals(
+                            SettingsManager.KeyboardThemeTarget.SOFTWARE.name,
+                            ignoreCase = true
+                        ) ->
                             SettingsManager.KeyboardThemeTarget.SOFTWARE
+                        initialKeyboardThemeTarget.equals(
+                            SettingsManager.KeyboardThemeTarget.HARDWARE.name,
+                            ignoreCase = true
+                        ) ->
+                            SettingsManager.KeyboardThemeTarget.HARDWARE
                         else -> null
+                    },
+                    initialTab = KeyboardThemeEditorTab.values().firstOrNull { tab ->
+                        tab.name.equals(initialKeyboardThemeTab, ignoreCase = true)
                     }
                 )
             }

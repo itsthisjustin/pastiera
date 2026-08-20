@@ -853,4 +853,13 @@ Cada tecla puede configurarse como Keycode, Acción, Native Ctrl o Ninguno. Usa 
     <string name="dynamic_variation_resize_to_content_description">Si está activado, las entradas dinámicas llenan la fila disponible según cuántas se muestren. Si está desactivado, conservan el tamaño de espacio del control deslizante y quedan alineadas a la izquierda.</string>
     <string name="keyboard_theme_tab_colors">Colores</string>
     <string name="keyboard_theme_tab_keys">Teclas</string>
+
+    <string name="settings_search_hint">Buscar en los ajustes</string>
+    <string name="settings_search_no_results">No hay ajustes coincidentes</string>
+    <string name="settings_link_copy">Copiar enlace</string>
+    <string name="settings_link_copy_markdown">Copiar Markdown</string>
+    <string name="settings_link_share">Compartir</string>
+    <string name="settings_link_with_description">Con descripción</string>
+    <string name="settings_link_copied_toast">Enlace copiado</string>
+    <string name="settings_link_unavailable_toast">Este ajuste no está disponible</string>
 </resources>

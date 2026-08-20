@@ -853,4 +853,13 @@ Każdy klawisz można skonfigurować jako Keycode, Akcja, Native Ctrl lub Brak. 
     <string name="dynamic_variation_resize_to_content_description">Gdy włączone, dynamiczne pozycje wypełniają dostępny wiersz zależnie od liczby wyświetlanych elementów. Gdy wyłączone, zachowują rozmiar slotu z suwaka i pozostają wyrównane do lewej.</string>
     <string name="keyboard_theme_tab_colors">Kolory</string>
     <string name="keyboard_theme_tab_keys">Klawisze</string>
+
+    <string name="settings_search_hint">Szukaj w ustawieniach</string>
+    <string name="settings_search_no_results">Brak pasujących ustawień</string>
+    <string name="settings_link_copy">Kopiuj link</string>
+    <string name="settings_link_copy_markdown">Kopiuj Markdown</string>
+    <string name="settings_link_share">Udostępnij</string>
+    <string name="settings_link_with_description">Z opisem</string>
+    <string name="settings_link_copied_toast">Link skopiowano</string>
+    <string name="settings_link_unavailable_toast">To ustawienie jest niedostępne</string>
 </resources>

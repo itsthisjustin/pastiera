@@ -1,7 +1,6 @@
 package it.palsoftware.pastiera
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -130,7 +129,7 @@ fun AboutScreen(
                 modifier = Modifier
                     .fillMaxWidth(0.35f)
                     .align(Alignment.CenterHorizontally)
-                    .clickable {
+                    .settingRow(SettingLinkIds.ABOUT_SUPPORT_KO_FI) {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse("https://ko-fi.com/palsoftware"))
                         )

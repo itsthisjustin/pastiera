@@ -380,7 +380,11 @@ private fun LanguageLayoutModeCard() {
         mutableStateOf(SettingsManager.isKeyboardLayoutAutoByLocale(context))
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .settingRow(SettingLinkIds.CUSTOM_INPUT_STYLES_LAYOUT_MODE)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -463,6 +467,7 @@ private fun LayoutSwitchShortcutsCard() {
                 title = stringResource(R.string.alt_shift_layout_switch_title),
                 description = stringResource(R.string.alt_shift_layout_switch_description),
                 checked = altShiftLayoutSwitch,
+                linkId = SettingLinkIds.CUSTOM_INPUT_STYLES_ALT_SHIFT_LAYOUT_SWITCH,
                 onCheckedChange = { enabled ->
                     altShiftLayoutSwitch = enabled
                     SettingsManager.setAltShiftLayoutSwitchEnabled(context, enabled)
@@ -473,6 +478,7 @@ private fun LayoutSwitchShortcutsCard() {
                 title = stringResource(R.string.alt_enter_layout_switch_title),
                 description = stringResource(R.string.alt_enter_layout_switch_description),
                 checked = altEnterLayoutSwitch,
+                linkId = SettingLinkIds.CUSTOM_INPUT_STYLES_ALT_ENTER_LAYOUT_SWITCH,
                 onCheckedChange = { enabled ->
                     altEnterLayoutSwitch = enabled
                     SettingsManager.setAltEnterLayoutSwitchEnabled(context, enabled)
@@ -483,6 +489,7 @@ private fun LayoutSwitchShortcutsCard() {
                 title = stringResource(R.string.ctrl_space_layout_switch_title),
                 description = stringResource(R.string.ctrl_space_layout_switch_description),
                 checked = ctrlSpaceLayoutSwitch,
+                linkId = SettingLinkIds.CUSTOM_INPUT_STYLES_CTRL_SPACE_LAYOUT_SWITCH,
                 onCheckedChange = { enabled ->
                     ctrlSpaceLayoutSwitch = enabled
                     SettingsManager.setCtrlSpaceLayoutSwitchEnabled(context, enabled)
@@ -493,6 +500,7 @@ private fun LayoutSwitchShortcutsCard() {
                 title = stringResource(R.string.toast_on_layout_switch_title),
                 description = stringResource(R.string.toast_on_layout_switch_description),
                 checked = toastOnLayoutSwitch,
+                linkId = SettingLinkIds.CUSTOM_INPUT_STYLES_LAYOUT_SWITCH_TOAST,
                 onCheckedChange = { enabled ->
                     toastOnLayoutSwitch = enabled
                     SettingsManager.setToastOnLayoutSwitchEnabled(context, enabled)
@@ -507,10 +515,11 @@ private fun LayoutSwitchShortcutRow(
     title: String,
     description: String,
     checked: Boolean,
+    linkId: String? = null,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().settingRow(linkId),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {

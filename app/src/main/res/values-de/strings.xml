@@ -1313,4 +1313,70 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="tutorial_whats_new_bug_fixes_title">Fehlerbehebungen</string>
     <string name="tutorial_whats_new_docs_button">Pastiera-Dokumentation öffnen</string>
     <string name="tutorial_whats_new_continue_hint">Fahre mit dem Tutorial fort, um die wichtigsten Einstellungen dieser Version durchzugehen.</string>
+
+    <!-- Settings search and shareable setting links -->
+    <string name="settings_search_hint">Einstellungen durchsuchen</string>
+    <string name="settings_search_no_results">Keine passenden Einstellungen</string>
+    <string name="settings_link_copy">Link kopieren</string>
+    <string name="settings_link_copy_markdown">Markdown kopieren</string>
+    <string name="settings_link_share">Teilen</string>
+    <string name="settings_link_with_description">Mit Beschreibung</string>
+    <string name="settings_link_copied_toast">Link kopiert</string>
+    <string name="settings_link_unavailable_toast">Diese Einstellung ist nicht verfügbar</string>
+
+    <!-- Fehlende Übersetzungen für Toggles/LED-Strings des Tastaturthemen-Editors -->
+    <string name="keyboard_theme_show_leds">LEDs anzeigen</string>
+    <string name="keyboard_theme_distribute_spacing">Abstände verteilen</string>
+    <string name="keyboard_theme_ortholinear">Ortholinear</string>
+    <string name="keyboard_theme_attach_popup">Popup an Taste anheften</string>
+    <string name="keyboard_theme_popup_tail">Popup-Schweif</string>
+    <string name="keyboard_theme_preview_on_hold">Tastenvorschau nur beim Halten</string>
+    <string name="keyboard_theme_character_picker">Zeichenwahl bei Langdruck</string>
+    <string name="keyboard_theme_wizard_leds">LED-Farben</string>
+    <string name="keyboard_theme_wizard_leds_description">Wähle die Farben für inaktive, aktive und gesperrte Modifier-Anzeigen.</string>
+
+    <!-- Unsichtbare Such-Keywords pro Einstellungseintrag; werden nie angezeigt,
+         sondern nur von der Einstellungssuche genutzt. -->
+    <string name="kw_main_keyboards_devices">Tastaturen, Geräte, Hardware, Bluetooth, physische Tastatur, Clicks</string>
+    <string name="kw_main_modifiers">LED, LEDs, Leuchten, Anzeigen, Indikatoren, Umschalt, Strg, Alt, Sym</string>
+    <string name="kw_main_custom_input_styles">Tastaturlayout, Layouts, Eingabestile, Sprachen, pro Sprache</string>
+    <string name="kw_main_text_input">Tippen, Text, Zeichensetzung, Anführungszeichen, Abstände, Großschreibung</string>
+    <string name="kw_main_auto_correction">Korrektur, Autokorrektur, Rechtschreibung, Vorschläge, Ersetzungen, Wörterbücher</string>
+    <string name="kw_main_keyboard_theme">Theme, Themen, Farben, dunkel, hell, Presets, Hardwaretastatur, Bildschirmtastatur, Pastiera Dark, Pastiera Light, Cloud Tap, Moon Tap, Classic Cloud, Classic Midnight</string>
+    <string name="kw_main_app_language">Sprache, App-Sprache, Locale, Übersetzung</string>
+    <string name="kw_main_customization">Anpassen, Anpassung, Erscheinungsbild</string>
+    <string name="kw_main_advanced">Erweitert, Backup, Wiederherstellung, Debug, Experte</string>
+    <string name="kw_main_accessibility">Barrierefreiheit, Verzögerung, Bounce-Tasten, überlappende Tasten, Screenreader</string>
+    <string name="kw_main_about">Über, Version, Unterstützung, Ko-fi, Spende</string>
+    <string name="kw_text_input_auto_space_punctuation">Abstände, Leerzeichen, Zeichensetzung</string>
+    <string name="kw_text_input_spaced_hyphen">Bindestrich, Gedankenstrich, Halbgeviertstrich, Zeichensetzung</string>
+    <string name="kw_text_input_smart_quotes">Anführungszeichen, Apostroph, typografische Anführungszeichen</string>
+    <string name="kw_text_input_shift_backspace">Umschalt, Shift, Rücktaste, Wort löschen</string>
+    <string name="kw_text_input_alt_backspace">Alt, Rücktaste, Wort löschen</string>
+    <string name="kw_text_input_backspace_start">Rücktaste, Zeile löschen, Textanfang</string>
+    <string name="kw_keyboards_devices_on_screen">Bildschirmtastatur, On-Screen-Tastatur, virtuelle Tastatur</string>
+    <string name="kw_keyboards_devices_built_in">eingebaute Tastaturen, Layouts, Hardware, Profile</string>
+    <string name="kw_keyboards_devices_accessories">Zubehör, Clicks, Cover</string>
+    <string name="kw_auto_correction_languages">Tastaturlayout, Eingabesprachen, Layouts, Wörterbücher, pro Sprache</string>
+    <string name="kw_auto_correction_suggestions">Vorschläge, Kandidaten, Vorhersage</string>
+    <string name="kw_auto_correction_accent_matching">Akzente, Diakritika, Übereinstimmung</string>
+    <string name="kw_accessibility_suggestions_delay">Verzögerung, Vorschläge, Barrierefreiheit, Timeout</string>
+    <string name="kw_keyboard_timing_long_press">Langdruck, lange Taste, Verzögerung, Timing, Schwellenwert</string>
+    <string name="kw_advanced_swipe_threshold">Wischen, Auswahl, Schwellenwert, Cursor</string>
+    <string name="kw_modifiers_long_press_modifier">Langdruck, Modifier, Einmalaktivierung</string>
+    <string name="kw_modifiers_long_press_threshold">Langdruck, Verzögerung, Schwellenwert, Modifier</string>
+    <string name="kw_modifier_indicators">LED, LEDs, Leuchten, Anzeigen, wo Modifier-Zustand erscheint</string>
+    <string name="kw_custom_input_styles_layout_mode">Layoutmodus, pro App, Wechsel</string>
+    <string name="kw_about_support_ko_fi">Unterstützung, Spenden, Ko-fi, Kaffee</string>
+    <string name="kw_theme_toggle_show_leds">LED, LEDs, Leuchten, Anzeigen, Bildschirmtastatur</string>
+    <string name="kw_theme_toggle_distribute_spacing">Abstände, Lücken, Tasten</string>
+    <string name="kw_theme_toggle_ortholinear">Raster, ausgerichtete Tasten, Layout</string>
+    <string name="kw_theme_toggle_attach_popup">Popup, Blase, Taste</string>
+    <string name="kw_theme_toggle_popup_tail">Schweif, Verbindung, Popup</string>
+    <string name="kw_theme_toggle_preview_on_hold">Vorschau, Halten, Langdruck</string>
+    <string name="kw_theme_toggle_character_picker">Zeichenwahl, Akzente, Alternativen, Symbole</string>
+    <string name="kw_theme_led_colors">LED, LEDs, inaktiv, aktiv, gesperrt, Modifier, Farben, Anzeigen</string>
+    <string name="kw_indicator_bottom_strip">LED, LEDs, Leuchten, Streifen, unten</string>
+    <string name="kw_indicator_menu_bar">LED, Leuchten, Icon, Statusleiste, Anzeigen</string>
+    <string name="kw_indicator_status_bar">LED, Leuchten, Symbole, Anzeigen, Pastiera</string>
 </resources>

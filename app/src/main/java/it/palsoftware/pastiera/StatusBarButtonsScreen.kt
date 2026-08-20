@@ -635,11 +635,20 @@ fun ModifierIndicatorMultiSelect(
         ) {
             options.forEach { indicator ->
                 val selected = indicator in selectedIndicators
+                val linkId = when (indicator) {
+                    SettingsManager.MODIFIER_INDICATOR_BOTTOM_STRIP ->
+                        SettingLinkIds.MODIFIERS_INDICATOR_BOTTOM_STRIP
+                    SettingsManager.MODIFIER_INDICATOR_MENU_BAR ->
+                        SettingLinkIds.MODIFIERS_INDICATOR_MENU_BAR
+                    SettingsManager.MODIFIER_INDICATOR_STATUS_BAR ->
+                        SettingLinkIds.MODIFIERS_INDICATOR_STATUS_BAR
+                    else -> null
+                }
                 Surface(
                     modifier = Modifier
                         .weight(1f)
                         .height(42.dp)
-                        .clickable {
+                        .settingRow(linkId) {
                             onIndicatorsSelected(
                                 if (selected) selectedIndicators - indicator else selectedIndicators + indicator
                             )

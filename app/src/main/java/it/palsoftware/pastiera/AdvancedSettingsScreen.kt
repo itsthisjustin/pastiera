@@ -337,7 +337,9 @@ fun AdvancedSettingsScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { navigateTo(AdvancedDestination.TrackpadGestures) }
+                                .settingRow(SettingLinkIds.ADVANCED_TRACKPAD_GESTURES) {
+                                    navigateTo(AdvancedDestination.TrackpadGestures)
+                                }
                         ) {
                             Column(
                                 modifier = Modifier
@@ -425,7 +427,7 @@ fun AdvancedSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .clickable {
+                                .settingRow(SettingLinkIds.ADVANCED_BACKUP) {
                                     backupLauncher.launch(defaultBackupName())
                                 }
                         ) {
@@ -469,7 +471,7 @@ fun AdvancedSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .clickable {
+                                .settingRow(SettingLinkIds.ADVANCED_RESTORE) {
                                     restoreLauncher.launch(arrayOf("application/zip"))
                                 }
                         ) {
@@ -513,6 +515,7 @@ fun AdvancedSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
+                                .settingRow(SettingLinkIds.ADVANCED_SWIPE_INCREMENTAL_THRESHOLD)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -565,6 +568,7 @@ fun AdvancedSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
+                                .settingRow(SettingLinkIds.ADVANCED_CLIPBOARD_RETENTION_TIME)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -674,7 +678,7 @@ fun AdvancedSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .clickable {
+                                .settingRow(SettingLinkIds.ADVANCED_SHOW_TUTORIAL) {
                                     SettingsManager.resetTutorialCompleted(context)
                                     val intent = Intent(context, TutorialActivity::class.java)
                                     context.startActivity(intent)
@@ -719,7 +723,7 @@ fun AdvancedSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .clickable {
+                                .settingRow(SettingLinkIds.ADVANCED_SHOW_RELEASE_NOTES_TUTORIAL) {
                                     val intent = Intent(context, TutorialActivity::class.java).apply {
                                         putExtra(TutorialActivity.EXTRA_UPDATE_TUTORIAL, true)
                                         putExtra(TutorialActivity.EXTRA_PREVIEW_UPDATE_TUTORIAL, true)

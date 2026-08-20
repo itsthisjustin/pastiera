@@ -1,12 +1,20 @@
 package it.palsoftware.pastiera
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import it.palsoftware.pastiera.ui.theme.PastieraTheme
+
+data class SettingLinkRequest(
+    val id: String,
+    val serial: Long
+)
 
 class SettingsActivity : LocalizedComponentActivity() {
     companion object {
@@ -24,24 +32,50 @@ class SettingsActivity : LocalizedComponentActivity() {
         const val KEYBOARD_THEME_TARGET_SOFTWARE = "software"
     }
 
+    // A request is an event, not persistent screen state: the serial lets the same
+    // link fire again via onNewIntent, while restored activities do not replay it.
+    private val settingLinkRequest = mutableStateOf<SettingLinkRequest?>(null)
+    private var nextSettingLinkSerial = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) {
             applySlideInFromRightTransition()
         }
         enableEdgeToEdge()
+        settingLinkRequest.value = if (savedInstanceState == null) {
+            resolveSettingLinkId(intent)?.let(::newSettingLinkRequest)
+        } else {
+            null
+        }
         setContent {
             PastieraTheme {
+                val linkRequest by settingLinkRequest
                 SettingsScreen(
                     modifier = Modifier.fillMaxSize(),
                     initialDestination = intent.getStringExtra(EXTRA_DESTINATION),
                     initialCustomizationDestination = intent.getStringExtra(EXTRA_CUSTOMIZATION_DESTINATION),
-                    initialKeyboardThemeTarget = intent.getStringExtra(EXTRA_KEYBOARD_THEME_TARGET)
+                    initialKeyboardThemeTarget = intent.getStringExtra(EXTRA_KEYBOARD_THEME_TARGET),
+                    settingLinkRequest = linkRequest
                 )
             }
         }
     }
-    
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        resolveSettingLinkId(intent)?.let { linkId ->
+            settingLinkRequest.value = newSettingLinkRequest(linkId)
+        }
+    }
+
+    private fun newSettingLinkRequest(id: String): SettingLinkRequest =
+        SettingLinkRequest(id = id, serial = ++nextSettingLinkSerial)
+
+    private fun resolveSettingLinkId(intent: Intent?): String? =
+        intent?.data?.let(SettingLinkRegistry::parseSettingLinkUri)
+
     override fun finish() {
         super.finish()
         applySlideOutToRightTransition()

@@ -853,4 +853,13 @@ Ctrl-ярлики застосунків із урахуванням розкл�
     <string name="dynamic_variation_resize_to_content_description">Якщо ввімкнено, динамічні елементи заповнюють доступний рядок залежно від їх кількості. Якщо вимкнено, вони зберігають розмір слота зі слайдера й лишаються вирівняними ліворуч.</string>
     <string name="keyboard_theme_tab_colors">Кольори</string>
     <string name="keyboard_theme_tab_keys">Клавіші</string>
+
+    <string name="settings_search_hint">Пошук у налаштуваннях</string>
+    <string name="settings_search_no_results">Немає відповідних налаштувань</string>
+    <string name="settings_link_copy">Копіювати посилання</string>
+    <string name="settings_link_copy_markdown">Копіювати Markdown</string>
+    <string name="settings_link_share">Поділитися</string>
+    <string name="settings_link_with_description">З описом</string>
+    <string name="settings_link_copied_toast">Посилання скопійовано</string>
+    <string name="settings_link_unavailable_toast">Цей параметр недоступний</string>
 </resources>

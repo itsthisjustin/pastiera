@@ -95,7 +95,8 @@ import kotlin.math.sqrt
 fun KeyboardThemeScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
-    initialTarget: SettingsManager.KeyboardThemeTarget? = null
+    initialTarget: SettingsManager.KeyboardThemeTarget? = null,
+    initialTab: KeyboardThemeEditorTab? = null
 ) {
     val context = LocalContext.current
     val builtInPresets = remember { keyboardThemePresets() }
@@ -124,7 +125,9 @@ fun KeyboardThemeScreen(
         }
     }
     val previewPagerState = rememberPagerState(initialPage = initialPreviewPage, pageCount = { 2 })
-    var customizationTab by remember { mutableStateOf(0) }
+    var customizationTab by remember {
+        mutableStateOf(if (initialTab == KeyboardThemeEditorTab.Keys) 1 else 0)
+    }
     val initialHardwarePreset = remember {
         SettingsManager.getKeyboardTheme(context, SettingsManager.KeyboardThemeTarget.HARDWARE).toKeyboardThemePreset("Custom")
     }
@@ -1934,7 +1937,12 @@ private fun KeyboardThemeDraftColorsEditor(
                         color = item.color,
                         populated = item.field in populatedFields,
                         onColorChanged = { color -> onFieldChanged(item.field, item.onColorChanged(color)) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        linkId = if (item.field == DRAFT_LED_INACTIVE) {
+                            SettingLinkIds.KEYBOARD_THEME_LED_COLORS
+                        } else {
+                            null
+                        }
                     )
                 }
                 if (rowItems.size == 1) Box(modifier = Modifier.weight(1f))
@@ -1958,13 +1966,13 @@ private fun KeyboardThemeDraftKeysEditor(
         KeyboardThemeDraftSliderRow(DRAFT_ROW_SPACING, stringResource(R.string.keyboard_theme_row_spacing), theme.rowGapScale, 0f..2f, populatedFields) { onFieldChanged(DRAFT_ROW_SPACING, theme.copy(rowGapScale = it)) }
         KeyboardThemeDraftSliderRow(DRAFT_SUGGESTIONS_HEIGHT, stringResource(R.string.keyboard_theme_suggestions_height), theme.suggestionsHeightScale, 0.65f..1.6f, populatedFields) { onFieldChanged(DRAFT_SUGGESTIONS_HEIGHT, theme.copy(suggestionsHeightScale = it)) }
         KeyboardThemeDraftSliderRow(DRAFT_VARIATIONS_HEIGHT, stringResource(R.string.keyboard_theme_variations_height), theme.variationsHeightScale, 0.65f..1.6f, populatedFields) { onFieldChanged(DRAFT_VARIATIONS_HEIGHT, theme.copy(variationsHeightScale = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_SHOW_LEDS, stringResource(R.string.keyboard_theme_show_leds), theme.showLeds, populatedFields) { onFieldChanged(DRAFT_SHOW_LEDS, theme.copy(showLeds = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_DISTRIBUTE_SPACING, stringResource(R.string.keyboard_theme_distribute_spacing), theme.distributeHorizontalSpacing, populatedFields) { onFieldChanged(DRAFT_DISTRIBUTE_SPACING, theme.copy(distributeHorizontalSpacing = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_ORTHOLINEAR, stringResource(R.string.keyboard_theme_ortholinear), theme.ortholinear, populatedFields) { onFieldChanged(DRAFT_ORTHOLINEAR, theme.copy(ortholinear = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_ATTACH_POPUP, stringResource(R.string.keyboard_theme_attach_popup), theme.keyPopupAttached, populatedFields) { onFieldChanged(DRAFT_ATTACH_POPUP, theme.copy(keyPopupAttached = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_POPUP_TAIL, stringResource(R.string.keyboard_theme_popup_tail), theme.keyPopupTailEnabled, populatedFields) { onFieldChanged(DRAFT_POPUP_TAIL, theme.copy(keyPopupTailEnabled = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_PREVIEW_ON_HOLD, stringResource(R.string.keyboard_theme_preview_on_hold), theme.keyPreviewAfterLongPress, populatedFields) { onFieldChanged(DRAFT_PREVIEW_ON_HOLD, theme.copy(keyPreviewAfterLongPress = it)) }
-        KeyboardThemeDraftSwitchRow(DRAFT_CHARACTER_PICKER, stringResource(R.string.keyboard_theme_character_picker), theme.keyAlternatesPopupEnabled, populatedFields) { onFieldChanged(DRAFT_CHARACTER_PICKER, theme.copy(keyAlternatesPopupEnabled = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_SHOW_LEDS, stringResource(R.string.keyboard_theme_show_leds), theme.showLeds, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_SHOW_LEDS) { onFieldChanged(DRAFT_SHOW_LEDS, theme.copy(showLeds = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_DISTRIBUTE_SPACING, stringResource(R.string.keyboard_theme_distribute_spacing), theme.distributeHorizontalSpacing, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_DISTRIBUTE_SPACING) { onFieldChanged(DRAFT_DISTRIBUTE_SPACING, theme.copy(distributeHorizontalSpacing = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_ORTHOLINEAR, stringResource(R.string.keyboard_theme_ortholinear), theme.ortholinear, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_ORTHOLINEAR) { onFieldChanged(DRAFT_ORTHOLINEAR, theme.copy(ortholinear = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_ATTACH_POPUP, stringResource(R.string.keyboard_theme_attach_popup), theme.keyPopupAttached, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_ATTACH_POPUP) { onFieldChanged(DRAFT_ATTACH_POPUP, theme.copy(keyPopupAttached = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_POPUP_TAIL, stringResource(R.string.keyboard_theme_popup_tail), theme.keyPopupTailEnabled, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_POPUP_TAIL) { onFieldChanged(DRAFT_POPUP_TAIL, theme.copy(keyPopupTailEnabled = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_PREVIEW_ON_HOLD, stringResource(R.string.keyboard_theme_preview_on_hold), theme.keyPreviewAfterLongPress, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_PREVIEW_ON_HOLD) { onFieldChanged(DRAFT_PREVIEW_ON_HOLD, theme.copy(keyPreviewAfterLongPress = it)) }
+        KeyboardThemeDraftSwitchRow(DRAFT_CHARACTER_PICKER, stringResource(R.string.keyboard_theme_character_picker), theme.keyAlternatesPopupEnabled, populatedFields, linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_CHARACTER_PICKER) { onFieldChanged(DRAFT_CHARACTER_PICKER, theme.copy(keyAlternatesPopupEnabled = it)) }
     }
 }
 
@@ -1974,10 +1982,13 @@ private fun KeyboardThemeDraftColorRow(
     color: Int,
     populated: Boolean,
     onColorChanged: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    linkId: String? = null
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .settingRow(linkId),
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
         border = if (populated) null else BorderStroke(1.dp, MaterialTheme.colorScheme.error)
@@ -2035,12 +2046,13 @@ private fun KeyboardThemeDraftSwitchRow(
     label: String,
     checked: Boolean,
     populatedFields: Set<String>,
+    linkId: String? = null,
     onCheckedChanged: (Boolean) -> Unit
 ) {
     if (field in populatedFields) {
-        KeyboardThemeSwitchRow(label, checked, checked, onCheckedChanged)
+        KeyboardThemeSwitchRow(label, checked, checked, onCheckedChanged, linkId)
     } else {
-        KeyboardThemeRequiredRow(label = label) {
+        KeyboardThemeRequiredRow(label = label, linkId = linkId) {
             TextButton(onClick = { onCheckedChanged(false) }) { Text(stringResource(R.string.off)) }
             TextButton(onClick = { onCheckedChanged(true) }) { Text(stringResource(R.string.on)) }
         }
@@ -2050,10 +2062,11 @@ private fun KeyboardThemeDraftSwitchRow(
 @Composable
 private fun KeyboardThemeRequiredRow(
     label: String,
+    linkId: String? = null,
     actions: @Composable RowScope.() -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().settingRow(linkId),
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
@@ -2171,7 +2184,8 @@ private fun KeyboardThemeColorsEditor(
                 label = stringResource(R.string.keyboard_theme_led_inactive),
                 color = theme.ledInactive,
                 presetColor = preset.ledInactive,
-                onColorChanged = { onThemeChanged(theme.copy(ledInactive = it)) }
+                onColorChanged = { onThemeChanged(theme.copy(ledInactive = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_LED_COLORS
             )
         )
         add(
@@ -2207,7 +2221,8 @@ private fun KeyboardThemeColorsEditor(
                         color = item.color,
                         presetColor = item.presetColor,
                         onColorChanged = item.onColorChanged,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        linkId = item.linkId
                     )
                 }
                 if (rowItems.size == 1) {
@@ -2222,7 +2237,8 @@ private data class KeyboardThemeColorEditorItem(
     val label: String,
     val color: Int,
     val presetColor: Int,
-    val onColorChanged: (Int) -> Unit
+    val onColorChanged: (Int) -> Unit,
+    val linkId: String? = null
 )
 
 @Composable
@@ -2268,7 +2284,8 @@ private fun KeyboardThemeKeysEditor(
                 label = "Show LEDs",
                 checked = theme.showLeds,
                 presetChecked = preset.showLeds,
-                onCheckedChanged = { onThemeChanged(theme.copy(showLeds = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(showLeds = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_SHOW_LEDS
             )
             KeyboardThemeSliderRow(
                 label = "Key height",
@@ -2302,37 +2319,43 @@ private fun KeyboardThemeKeysEditor(
                 label = "Distribute spacing",
                 checked = theme.distributeHorizontalSpacing,
                 presetChecked = preset.distributeHorizontalSpacing,
-                onCheckedChanged = { onThemeChanged(theme.copy(distributeHorizontalSpacing = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(distributeHorizontalSpacing = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_DISTRIBUTE_SPACING
             )
             KeyboardThemeSwitchRow(
                 label = "Ortholinear",
                 checked = theme.ortholinear,
                 presetChecked = preset.ortholinear,
-                onCheckedChanged = { onThemeChanged(theme.copy(ortholinear = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(ortholinear = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_ORTHOLINEAR
             )
             KeyboardThemeSwitchRow(
                 label = "Attach popup to key",
                 checked = theme.keyPopupAttached,
                 presetChecked = preset.keyPopupAttached,
-                onCheckedChanged = { onThemeChanged(theme.copy(keyPopupAttached = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(keyPopupAttached = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_ATTACH_POPUP
             )
             KeyboardThemeSwitchRow(
                 label = "Popup tail connector",
                 checked = theme.keyPopupTailEnabled,
                 presetChecked = preset.keyPopupTailEnabled,
-                onCheckedChanged = { onThemeChanged(theme.copy(keyPopupTailEnabled = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(keyPopupTailEnabled = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_POPUP_TAIL
             )
             KeyboardThemeSwitchRow(
                 label = "Show key preview only on hold",
                 checked = theme.keyPreviewAfterLongPress,
                 presetChecked = preset.keyPreviewAfterLongPress,
-                onCheckedChanged = { onThemeChanged(theme.copy(keyPreviewAfterLongPress = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(keyPreviewAfterLongPress = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_PREVIEW_ON_HOLD
             )
             KeyboardThemeSwitchRow(
                 label = "Long-press character picker",
                 checked = theme.keyAlternatesPopupEnabled,
                 presetChecked = preset.keyAlternatesPopupEnabled,
-                onCheckedChanged = { onThemeChanged(theme.copy(keyAlternatesPopupEnabled = it)) }
+                onCheckedChanged = { onThemeChanged(theme.copy(keyAlternatesPopupEnabled = it)) },
+                linkId = SettingLinkIds.KEYBOARD_THEME_TOGGLE_CHARACTER_PICKER
             )
         }
     }
@@ -2438,10 +2461,11 @@ private fun KeyboardThemeColorRow(
     color: Int,
     presetColor: Int,
     onColorChanged: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    linkId: String? = null
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().settingRow(linkId),
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium
     ) {
@@ -2538,10 +2562,13 @@ private fun KeyboardThemeSwitchRow(
     label: String,
     checked: Boolean,
     presetChecked: Boolean,
-    onCheckedChanged: (Boolean) -> Unit
+    onCheckedChanged: (Boolean) -> Unit,
+    linkId: String? = null
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .settingRow(linkId),
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium
     ) {
