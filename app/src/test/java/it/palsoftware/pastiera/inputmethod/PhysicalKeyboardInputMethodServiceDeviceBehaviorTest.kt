@@ -216,6 +216,22 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
     }
 
     @Test
+    fun clicksPower_sameFrameShiftMacroDoesNotToggleLogicalShift() {
+        val context = RuntimeEnvironment.getApplication()
+        SettingsManager.setPhysicalKeyboardProfileOverride(context, "clicks_power")
+        setField(service, "physicalKeyboardProfileOverride", "clicks_power")
+
+        repeat(4) { index ->
+            typeClicksSyntheticAtMacro(3_000L + index * 400L)
+            val modifier = modifierController()
+            assertFalse(modifier.shiftOneShot)
+            assertFalse(modifier.capsLockEnabled)
+            assertFalse(modifier.shiftPressed)
+            assertFalse(modifier.shiftPhysicallyPressed)
+        }
+    }
+
+    @Test
     fun shiftEnter_consumesManualShift_whenAutoCapitalizeAtLineStartIsDisabled() {
         val context = RuntimeEnvironment.getApplication()
         SettingsManager.setAutoCapitalizeFirstLetter(context, false)
@@ -826,6 +842,49 @@ class PhysicalKeyboardInputMethodServiceDeviceBehaviorTest {
         service.onKeyUp(
             KeyEvent.KEYCODE_CTRL_LEFT,
             keyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, start, start + 30L)
+        )
+    }
+
+    private fun typeClicksSyntheticAtMacro(start: Long) {
+        val shiftMeta = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        service.onKeyDown(
+            KeyEvent.KEYCODE_SHIFT_LEFT,
+            keyEvent(
+                action = KeyEvent.ACTION_DOWN,
+                keyCode = KeyEvent.KEYCODE_SHIFT_LEFT,
+                downTime = start,
+                eventTime = start,
+                metaState = shiftMeta
+            )
+        )
+        service.onKeyDown(
+            KeyEvent.KEYCODE_2,
+            keyEvent(
+                action = KeyEvent.ACTION_DOWN,
+                keyCode = KeyEvent.KEYCODE_2,
+                downTime = start,
+                eventTime = start,
+                metaState = shiftMeta
+            )
+        )
+        service.onKeyUp(
+            KeyEvent.KEYCODE_2,
+            keyEvent(
+                action = KeyEvent.ACTION_UP,
+                keyCode = KeyEvent.KEYCODE_2,
+                downTime = start,
+                eventTime = start + 90L,
+                metaState = shiftMeta
+            )
+        )
+        service.onKeyUp(
+            KeyEvent.KEYCODE_SHIFT_LEFT,
+            keyEvent(
+                action = KeyEvent.ACTION_UP,
+                keyCode = KeyEvent.KEYCODE_SHIFT_LEFT,
+                downTime = start,
+                eventTime = start + 120L
+            )
         )
     }
 

@@ -40,8 +40,18 @@ class KeyboardVisibilityController(
     private var surfaceTransitionGeneration = 0
     private var pendingSurfaceTransition: PendingSurfaceTransition? = null
     private var candidatesSurfaceRequested = false
-    private var candidatesSurfaceRecoveryGeneration = 0
-    private var pendingCandidatesSurfaceRecovery: Int? = null
+    private val candidatesSurfaceRecoveryWorkaround = CandidatesSurfaceRecoveryWorkaround(
+        isRequired = requiresCandidatesSurfaceRecovery,
+        canRecover = {
+            isInputViewActive() &&
+                currentInputConnection() != null &&
+                !isNavModeLatched() &&
+                SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) !=
+                SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
+        },
+        requestRecovery = requestShowInputView,
+        postDelayed = postToUiDelayed
+    )
 
     enum class RenderedSurface {
         HIDDEN,
@@ -133,43 +143,7 @@ class KeyboardVisibilityController(
             if (!requestCandidatesView()) return
             refreshStatusBar()
         }
-        scheduleCandidatesSurfaceRecoveryIfNeeded()
-    }
-
-    private fun scheduleCandidatesSurfaceRecoveryIfNeeded() {
-        if (
-            !requiresCandidatesSurfaceRecovery() ||
-            pendingCandidatesSurfaceRecovery != null
-        ) {
-            return
-        }
-
-        val recoveryGeneration = ++candidatesSurfaceRecoveryGeneration
-        val transitionGeneration = surfaceTransitionGeneration
-        pendingCandidatesSurfaceRecovery = recoveryGeneration
-        postToUiDelayed(CANDIDATES_SURFACE_RECOVERY_DELAY_MS) {
-            if (pendingCandidatesSurfaceRecovery != recoveryGeneration) {
-                return@postToUiDelayed
-            }
-            pendingCandidatesSurfaceRecovery = null
-            if (
-                transitionGeneration != surfaceTransitionGeneration ||
-                !requiresCandidatesSurfaceRecovery() ||
-                !isInputViewActive() ||
-                currentInputConnection() == null ||
-                isNavModeLatched() ||
-                SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) ==
-                    SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
-            ) {
-                return@postToUiDelayed
-            }
-
-            try {
-                requestShowInputView()
-            } catch (_: Exception) {
-                // The editor may disappear while the delayed compatibility request is pending.
-            }
-        }
+        candidatesSurfaceRecoveryWorkaround.scheduleIfNeeded()
     }
 
     fun onImeWindowVisibilityChanged(shown: Boolean) {
@@ -226,7 +200,7 @@ class KeyboardVisibilityController(
     ) {
         val generation = ++surfaceTransitionGeneration
         pendingSurfaceTransition = null
-        cancelPendingCandidatesSurfaceRecovery()
+        candidatesSurfaceRecoveryWorkaround.cancel()
         refreshStatusBar()
         if ((requireActiveTextField && !hasActiveTextField()) || currentInputConnection() == null) {
             return
@@ -265,12 +239,7 @@ class KeyboardVisibilityController(
     fun cancelPendingSurfaceTransition() {
         surfaceTransitionGeneration += 1
         pendingSurfaceTransition = null
-        cancelPendingCandidatesSurfaceRecovery()
-    }
-
-    private fun cancelPendingCandidatesSurfaceRecovery() {
-        candidatesSurfaceRecoveryGeneration += 1
-        pendingCandidatesSurfaceRecovery = null
+        candidatesSurfaceRecoveryWorkaround.cancel()
     }
 
     private fun reconcilePendingSurfaceTransition(generation: Int) {
@@ -385,6 +354,5 @@ class KeyboardVisibilityController(
     private companion object {
         const val MAX_SURFACE_TRANSITION_ATTEMPTS = 6
         const val SURFACE_TRANSITION_RETRY_DELAY_MS = 250L
-        const val CANDIDATES_SURFACE_RECOVERY_DELAY_MS = 250L
     }
 }

@@ -38,3 +38,7 @@ debug-logs/
 
 # Local prediction benchmark workspace
 .prediction-bench/
+
+# Local agent instructions
+AGENTS.md
+CLAUDE.md

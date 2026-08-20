@@ -94,10 +94,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         private const val MODIFIER_ICON_ACTIVE = 1
         private const val MODIFIER_ICON_LOCKED = 2
         private const val DISCORD_PACKAGE_NAME = "com.discord"
-        private const val TELEGRAM_PACKAGE_NAME = "org.telegram.messenger"
         private val MESSENGER_ENTER_BEHAVIOR_PACKAGES = setOf(
             "com.whatsapp",
-            TELEGRAM_PACKAGE_NAME,
+            CompatibilityWorkarounds.TELEGRAM_PACKAGE_NAME,
             "org.thoughtcrime.securesms",
             DISCORD_PACKAGE_NAME,
             "im.vector.app",
@@ -1964,7 +1963,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 }
             },
             requiresCandidatesSurfaceRecovery = {
-                currentPackageName == TELEGRAM_PACKAGE_NAME
+                CompatibilityWorkarounds.requiresCandidatesSurfaceRecovery(currentPackageName)
             },
             setRequestedInputViewShown = { shown -> requestedInputViewShown = shown },
             attachInputView = { view -> setInputView(view) },
@@ -4488,6 +4487,22 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             otherKeyInteractedDuringHold = false
             modifierDownTimes[keyCode] = event.eventTime
         } else if (!isModifierKey && event?.repeatCount == 0) {
+            if (
+                CompatibilityWorkarounds.isClicksPowerSyntheticShiftChord(
+                    profileId = DeviceSpecific.resolveInputProfile(
+                        event,
+                        physicalKeyboardProfileOverride
+                    ).profileId,
+                    event = event,
+                    activeShiftDownTimes = sequenceOf(
+                        modifierDownTimes[KeyEvent.KEYCODE_SHIFT_LEFT],
+                        modifierDownTimes[KeyEvent.KEYCODE_SHIFT_RIGHT]
+                    ).filterNotNull()
+                )
+            ) {
+                modifierStateBeforeHold?.let(modifierStateController::restoreLogicalState)
+                updateStatusBarText()
+            }
             otherKeyInteractedDuringHold = true
             lastShiftTapUpTime = 0L
             lastAltTapUpTime = 0L
