@@ -54,7 +54,8 @@ private enum class KeyboardsDevicesDestination { Main, OnScreen, BuiltIn, PowerK
 fun KeyboardsDevicesSettingsScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
-    onNavModeSettingsClick: (Int?) -> Unit
+    onNavModeSettingsClick: (Int?) -> Unit,
+    onOpenKeyboardTheme: () -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(KeyboardsDevicesDestination.Main) }
     when (destination) {
@@ -68,7 +69,8 @@ fun KeyboardsDevicesSettingsScreen(
         )
         KeyboardsDevicesDestination.OnScreen -> VirtualKeyboardBehaviorSettingsScreen(
             modifier = modifier,
-            onBack = { destination = KeyboardsDevicesDestination.Main }
+            onBack = { destination = KeyboardsDevicesDestination.Main },
+            onOpenKeyboardTheme = onOpenKeyboardTheme
         )
         KeyboardsDevicesDestination.BuiltIn -> HardwareKeyboardSettingsScreen(
             modifier = modifier,

@@ -429,6 +429,8 @@ fun SymCustomizationScreen(
                                     when (pageId) {
                                         SymPagesConfig.PAGE_DEVICE -> context.startActivity(
                                             Intent(context, SettingsActivity::class.java).apply {
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                    Intent.FLAG_ACTIVITY_CLEAR_TOP
                                                 putExtra(
                                                     SettingsActivity.EXTRA_DESTINATION,
                                                     SettingsActivity.DESTINATION_DEVICE_SYM_LAYER_EDITOR
@@ -481,6 +483,7 @@ fun SymCustomizationScreen(
                 .clickable {
                     context.startActivity(
                         Intent(context, SettingsActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                             putExtra(SettingsActivity.EXTRA_DESTINATION, SettingsActivity.DESTINATION_MODIFIERS)
                         }
                     )

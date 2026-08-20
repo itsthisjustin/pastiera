@@ -1,16 +1,6 @@
 package it.palsoftware.pastiera
 
-import android.content.Context
-import android.content.Intent
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,11 +11,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -36,143 +23,13 @@ import androidx.compose.ui.unit.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.activity.compose.BackHandler
 import it.palsoftware.pastiera.R
-
-/**
- * Keyboard & Timing settings screen.
- */
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun KeyboardTimingSettingsScreen(
-    modifier: Modifier = Modifier,
-    onBack: () -> Unit
-) {
-    val context = LocalContext.current
-    
-    var longPressThreshold by remember { 
-        mutableStateOf(SettingsManager.getLongPressThreshold(context))
-    }
-    KeyboardTimingMainContent(
-        modifier = modifier,
-        onBack = onBack,
-        longPressThreshold = longPressThreshold,
-        onLongPressThresholdChange = { longPressThreshold = it }
-    )
-}
-
-@Composable
-private fun KeyboardTimingMainContent(
-    modifier: Modifier,
-    onBack: () -> Unit,
-    longPressThreshold: Long,
-    onLongPressThresholdChange: (Long) -> Unit
-) {
-    val context = LocalContext.current
-
-    
-    // Handle system back button
-    BackHandler { onBack() }
-    
-    Scaffold(
-        topBar = {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars),
-                tonalElevation = 1.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.settings_back_content_description)
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.settings_category_keyboard_timing),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-            }
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // Long Press Threshold
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Timer,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.long_press_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.keyboard_timing_long_press_value,
-                                longPressThreshold
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
-                    Slider(
-                        value = longPressThreshold.toFloat(),
-                        onValueChange = { newValue ->
-                    val clampedValue = newValue.toLong().coerceIn(
-                        SettingsManager.getMinLongPressThreshold(),
-                        SettingsManager.getMaxLongPressThreshold()
-                    )
-                            onLongPressThresholdChange(clampedValue)
-                            SettingsManager.setLongPressThreshold(context, clampedValue)
-                        },
-                        valueRange = SettingsManager.getMinLongPressThreshold().toFloat()..SettingsManager.getMaxLongPressThreshold().toFloat(),
-                        steps = 18,
-                        modifier = Modifier
-                            .weight(1.5f)
-                            .height(24.dp)
-                    )
-                }
-            }
-        
-        }
-    }
-}
 
 @Composable
 internal fun VirtualKeyboardBehaviorSettingsScreen(
     modifier: Modifier = Modifier,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenKeyboardTheme: () -> Unit
 ) {
     val context = LocalContext.current
     var softwareKeyboardLayoutStyle by remember {
@@ -428,14 +285,7 @@ internal fun VirtualKeyboardBehaviorSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(74.dp)
-                    .clickable {
-                        context.startActivity(
-                            Intent(context, SettingsActivity::class.java)
-                                .putExtra(SettingsActivity.EXTRA_DESTINATION, SettingsActivity.DESTINATION_CUSTOMIZATION)
-                                .putExtra(SettingsActivity.EXTRA_CUSTOMIZATION_DESTINATION, SettingsActivity.CUSTOMIZATION_DESTINATION_KEYBOARD_THEME)
-                                .putExtra(SettingsActivity.EXTRA_KEYBOARD_THEME_TARGET, SettingsActivity.KEYBOARD_THEME_TARGET_SOFTWARE)
-                        )
-                    }
+                    .clickable(onClick = onOpenKeyboardTheme)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

@@ -61,7 +61,6 @@ import it.palsoftware.pastiera.update.shouldUseGithubUpdateChecks
 enum class SettingsDestination {
     Main,
     KeyboardsDevices,
-    KeyboardTiming,
     TextInput,
     Accessibility,
     AutoCorrection,
@@ -75,12 +74,42 @@ enum class SettingsDestination {
     Modifiers
 }
 
+/**
+ * One entry in the settings navigation stack. Deep-link payloads travel with
+ * their entry so a buried entry keeps its own destination instead of being
+ * repainted by whichever sibling was opened last.
+ */
+private data class SettingsStackEntry(
+    val destination: SettingsDestination,
+    val customizationDestination: String? = null,
+    val keyboardThemeTarget: String? = null,
+    val navModeKeyCode: Int? = null
+)
+
 private val settingsNavigationStackSaver =
-    listSaver<SnapshotStateList<SettingsDestination>, String>(
-        save = { stack -> stack.map(SettingsDestination::name) },
-        restore = { routes ->
-            mutableStateListOf<SettingsDestination>().apply {
-                addAll(routes.map(SettingsDestination::valueOf))
+    listSaver<SnapshotStateList<SettingsStackEntry>, String>(
+        save = { stack ->
+            stack.flatMap { entry ->
+                listOf(
+                    entry.destination.name,
+                    entry.customizationDestination.orEmpty(),
+                    entry.keyboardThemeTarget.orEmpty(),
+                    entry.navModeKeyCode?.toString().orEmpty()
+                )
+            }
+        },
+        restore = { values ->
+            mutableStateListOf<SettingsStackEntry>().apply {
+                values.chunked(4).forEach { (destination, customization, themeTarget, keyCode) ->
+                    add(
+                        SettingsStackEntry(
+                            destination = SettingsDestination.valueOf(destination),
+                            customizationDestination = customization.ifEmpty { null },
+                            keyboardThemeTarget = themeTarget.ifEmpty { null },
+                            navModeKeyCode = keyCode.ifEmpty { null }?.toIntOrNull()
+                        )
+                    )
+                }
             }
         }
     )
@@ -100,36 +129,40 @@ fun SettingsScreen(
     
     var checkingForUpdates by remember { mutableStateOf(false) }
     var navigationDirection by remember { mutableStateOf(NavigationDirection.Push) }
-    var requestedCustomizationDestination by rememberSaveable {
-        mutableStateOf(initialCustomizationDestination)
-    }
-    var requestedNavModeKeyCode by rememberSaveable { mutableStateOf<Int?>(null) }
     val navigationStack = rememberSaveable(saver = settingsNavigationStackSaver) {
-        mutableStateListOf<SettingsDestination>().apply {
-            if (initialDestination == SettingsActivity.DESTINATION_CUSTOMIZATION) {
-                if (initialCustomizationDestination == null) {
-                    add(SettingsDestination.Main)
+        mutableStateListOf<SettingsStackEntry>().apply {
+            when (initialDestination) {
+                SettingsActivity.DESTINATION_CUSTOMIZATION -> {
+                    if (initialCustomizationDestination == null) {
+                        add(SettingsStackEntry(SettingsDestination.Main))
+                    }
+                    add(
+                        SettingsStackEntry(
+                            destination = SettingsDestination.Customization,
+                            customizationDestination = initialCustomizationDestination,
+                            keyboardThemeTarget = initialKeyboardThemeTarget
+                        )
+                    )
                 }
-                add(SettingsDestination.Customization)
-            } else if (initialDestination == SettingsActivity.DESTINATION_DEVICE_SYM_LAYER_EDITOR) {
-                add(SettingsDestination.DeviceSymLayerEditor)
-            } else if (initialDestination == SettingsActivity.DESTINATION_MODIFIERS) {
-                add(SettingsDestination.Modifiers)
-            } else {
-                add(SettingsDestination.Main)
+                SettingsActivity.DESTINATION_DEVICE_SYM_LAYER_EDITOR ->
+                    add(SettingsStackEntry(SettingsDestination.DeviceSymLayerEditor))
+                SettingsActivity.DESTINATION_MODIFIERS ->
+                    add(SettingsStackEntry(SettingsDestination.Modifiers))
+                else -> add(SettingsStackEntry(SettingsDestination.Main))
             }
         }
     }
-    val currentDestination by remember {
+    val currentEntry by remember {
         derivedStateOf { navigationStack.last() }
     }
-    
+    val currentDestination = currentEntry.destination
+
     fun navigateTo(destination: SettingsDestination) {
         if (currentDestination == destination) return
         navigationDirection = NavigationDirection.Push
-        navigationStack.add(destination)
+        navigationStack.add(SettingsStackEntry(destination))
     }
-    
+
     fun navigateBack() {
         if (navigationStack.size > 1) {
             navigationDirection = NavigationDirection.Pop
@@ -139,9 +172,27 @@ fun SettingsScreen(
         }
     }
 
-    fun openCustomization(destination: String?) {
-        requestedCustomizationDestination = destination
-        navigateTo(SettingsDestination.Customization)
+    fun openCustomization(destination: String?, keyboardThemeTarget: String? = null) {
+        if (currentDestination == SettingsDestination.Customization) return
+        navigationDirection = NavigationDirection.Push
+        navigationStack.add(
+            SettingsStackEntry(
+                destination = SettingsDestination.Customization,
+                customizationDestination = destination,
+                keyboardThemeTarget = keyboardThemeTarget
+            )
+        )
+    }
+
+    fun navigateToNavMode(keyCode: Int?) {
+        if (currentDestination == SettingsDestination.NavMode) return
+        navigationDirection = NavigationDirection.Push
+        navigationStack.add(
+            SettingsStackEntry(
+                destination = SettingsDestination.NavMode,
+                navModeKeyCode = keyCode
+            )
+        )
     }
     
     // Automatic update check on screen open (only once, respecting dismissed releases)
@@ -164,7 +215,7 @@ fun SettingsScreen(
     BackHandler { navigateBack() }
     
     AnimatedContent(
-        targetState = currentDestination,
+        targetState = currentEntry,
         transitionSpec = {
             if (navigationDirection == NavigationDirection.Push) {
                 // Forward navigation: new screen enters from right, old screen exits to left
@@ -188,8 +239,8 @@ fun SettingsScreen(
         },
         label = "settings_navigation",
         contentKey = { it }
-    ) { destination ->
-        when (destination) {
+    ) { entry ->
+        when (entry.destination) {
             SettingsDestination.Main -> {
                 SettingsMainScreen(
                     modifier = modifier,
@@ -206,14 +257,16 @@ fun SettingsScreen(
                         openCustomization(SettingsActivity.CUSTOMIZATION_DESTINATION_STATUS_BAR_BUTTONS)
                     },
                     onKeyboardThemeClick = {
-                        openCustomization(SettingsActivity.CUSTOMIZATION_DESTINATION_KEYBOARD_THEME)
+                        openCustomization(
+                            SettingsActivity.CUSTOMIZATION_DESTINATION_KEYBOARD_THEME,
+                            initialKeyboardThemeTarget
+                        )
                     },
                     onQuickLauncherClick = {
                         openCustomization(SettingsActivity.CUSTOMIZATION_DESTINATION_LAUNCHER_SHORTCUTS)
                     },
                     onNavModeClick = {
-                        requestedNavModeKeyCode = null
-                        navigateTo(SettingsDestination.NavMode)
+                        navigateToNavMode(null)
                     },
                     onEnterBehaviorClick = {
                         openCustomization(SettingsActivity.CUSTOMIZATION_DESTINATION_APP_ENTER_BEHAVIOR)
@@ -230,22 +283,21 @@ fun SettingsScreen(
                     modifier = modifier,
                     onBack = { navigateBack() },
                     onNavModeSettingsClick = { keyCode ->
-                        requestedNavModeKeyCode = keyCode
-                        navigateTo(SettingsDestination.NavMode)
+                        navigateToNavMode(keyCode)
+                    },
+                    onOpenKeyboardTheme = {
+                        openCustomization(
+                            SettingsActivity.CUSTOMIZATION_DESTINATION_KEYBOARD_THEME,
+                            SettingsActivity.KEYBOARD_THEME_TARGET_SOFTWARE
+                        )
                     }
-                )
-            }
-            SettingsDestination.KeyboardTiming -> {
-                KeyboardTimingSettingsScreen(
-                    modifier = modifier,
-                    onBack = { navigateBack() }
                 )
             }
             SettingsDestination.TextInput -> {
                 TextInputSettingsScreen(
                     modifier = modifier,
                     onBack = { navigateBack() },
-                    onNavModeSettingsClick = { navigateTo(SettingsDestination.NavMode) }
+                    onNavModeSettingsClick = { navigateToNavMode(null) }
                 )
             }
             SettingsDestination.Accessibility -> {
@@ -261,21 +313,19 @@ fun SettingsScreen(
                 )
             }
             SettingsDestination.Customization -> {
-                key(requestedCustomizationDestination, initialKeyboardThemeTarget) {
-                    CustomizationSettingsScreen(
-                        modifier = modifier,
-                        onBack = { navigateBack() },
-                        initialDestination = requestedCustomizationDestination,
-                        initialKeyboardThemeTarget = initialKeyboardThemeTarget,
-                        onOpenModifiers = { navigateTo(SettingsDestination.Modifiers) }
-                    )
-                }
+                CustomizationSettingsScreen(
+                    modifier = modifier,
+                    onBack = { navigateBack() },
+                    initialDestination = entry.customizationDestination,
+                    initialKeyboardThemeTarget = entry.keyboardThemeTarget,
+                    onOpenModifiers = { navigateTo(SettingsDestination.Modifiers) }
+                )
             }
             SettingsDestination.NavMode -> {
                 NavModeSettingsScreen(
                     modifier = modifier,
                     onBack = { navigateBack() },
-                    initialKeyCode = requestedNavModeKeyCode
+                    initialKeyCode = entry.navModeKeyCode
                 )
             }
             SettingsDestination.Advanced -> {
@@ -307,14 +357,17 @@ fun SettingsScreen(
                     modifier = modifier,
                     onBack = { navigateBack() },
                     onOpenSymLayers = {
-                        context.startActivity(Intent(context, SymCustomizationActivity::class.java))
+                        context.startActivity(
+                            Intent(context, SymCustomizationActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                        )
                     },
                     onOpenSymShortcuts = {
                         openCustomization(SettingsActivity.CUSTOMIZATION_DESTINATION_LAUNCHER_SHORTCUTS)
                     },
                     onOpenNavMode = {
-                        requestedNavModeKeyCode = null
-                        navigateTo(SettingsDestination.NavMode)
+                        navigateToNavMode(null)
                     }
                 )
             }
