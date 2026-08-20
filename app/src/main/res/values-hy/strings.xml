@@ -254,11 +254,9 @@
     <string name="settings_nav_mode_configure">Կարգավորել նավիգացիայի ռեժիմի դասավորությունը</string>
     <string name="settings_update_section_title">Թարմացումներ</string>
     <string name="settings_update_section_description">Ստուգել GitHub-ի վերջին թողարկումը։</string>
-    <string name="settings_update_button">Ստուգել թարմացումները</string>
     <string name="settings_update_checking">Ստուգվում են թարմացումները…</string>
     <string name="settings_update_up_to_date">Հավելվածը արդիական է։</string>
     <string name="settings_update_check_failed">Չհաջողվեց կապ հաստատել GitHub-ի հետ։</string>
-    <string name="settings_category_keyboard_timing">Ստեղնաշար և ժամանակավորում</string>
     <string name="settings_category_text_input">Խելացի հնարավորություններ</string>
     <string name="settings_category_accessibility">Հասանելիություն</string>
     <string name="settings_category_auto_correction">Ավտո-ուղղում</string>

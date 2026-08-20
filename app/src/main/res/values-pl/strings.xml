@@ -244,7 +244,6 @@
     <string name="settings_support_ko_fi">Wsparcie na Ko-fi</string>
     <string name="settings_nav_mode_configure">Skonfiguruj mapowania klawiszy trybu nawigacji</string>
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
-    <string name="settings_category_keyboard_timing">Klawiatura &amp; Czasowanie</string>
     <string name="settings_category_text_input">Wprowadzanie Tekstu</string>
     <string name="settings_category_accessibility">Ułatwienia dostępu</string>
     <string name="settings_category_auto_correction">Auto-korekta</string>
@@ -568,7 +567,6 @@
     <string name="variation_global_layout_override_none">None (use current layout)</string>
     <string name="settings_update_section_title">Aktualizacje</string>
     <string name="settings_update_section_description">Sprawdź najnowsze wydanie na GitHubie.</string>
-    <string name="settings_update_button">Sprawdź aktualizacje</string>
     <string name="settings_update_checking">Sprawdzanie aktualizacji…</string>
     <string name="settings_update_up_to_date">Aplikacja jest aktualna.</string>
     <string name="settings_update_check_failed">Nie udało się połączyć z GitHubem.</string>

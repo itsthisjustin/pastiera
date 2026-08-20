@@ -275,7 +275,6 @@
     <string name="settings_nav_mode_configure">Налаштувати розкладку режиму навігації</string>
     <string name="settings_update_section_title">Оновлення</string>
     <string name="settings_update_section_description">Перевірити останній реліз на GitHub.</string>
-    <string name="settings_update_button">Перевірити оновлення</string>
     <string name="settings_update_checking">Перевірка оновлень…</string>
     <string name="settings_update_up_to_date">Додаток оновлений.</string>
     <string name="settings_update_check_failed">Не вдалося підключитися до GitHub.</string>
@@ -285,7 +284,6 @@
     <string name="update_dialog_later">Пізніше</string>
     <string name="update_dialog_download_apk">Завантажити APK</string>
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
-    <string name="settings_category_keyboard_timing">Клавіатура і тайминг</string>
     <string name="settings_category_text_input">Розумні функції</string>
     <string name="settings_category_accessibility">Доступність</string>
     <string name="settings_category_auto_correction">Автокорекція</string>

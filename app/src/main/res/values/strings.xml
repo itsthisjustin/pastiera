@@ -1039,7 +1039,6 @@ Each key can be configured as Keycode, Action, Native Ctrl, or None. Use overrid
     <string name="settings_nav_mode_configure">Configure navigation mode key mappings</string>
     <string name="settings_update_section_title">Updates</string>
     <string name="settings_update_section_description">Check the latest release on GitHub.</string>
-    <string name="settings_update_button">Check for updates</string>
     <string name="settings_update_checking">Checking for updates…</string>
     <string name="settings_update_up_to_date">App is up to date.</string>
     <string name="settings_update_check_failed">Unable to reach GitHub.</string>
@@ -1053,7 +1052,6 @@ Each key can be configured as Keycode, Action, Native Ctrl, or None. Use overrid
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
     
     <!-- Settings Categories -->
-    <string name="settings_category_keyboard_timing">Key Behaviour &amp; Timing</string>
     <string name="settings_category_text_input">Smart Features</string>
     <string name="settings_category_accessibility">Accessibility</string>
     <string name="settings_category_auto_correction">Auto-correction</string>

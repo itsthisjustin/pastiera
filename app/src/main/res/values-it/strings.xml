@@ -569,7 +569,6 @@ Ogni tasto può essere configurato come Keycode, Azione, Native Ctrl o Nessuno. 
     <string name="settings_nav_mode_configure">Configura le mappature dei tasti della modalità navigazione</string>
     <string name="settings_update_section_title">Aggiornamenti</string>
     <string name="settings_update_section_description">Controlla l\'ultima release su GitHub.</string>
-    <string name="settings_update_button">Controlla aggiornamenti</string>
     <string name="settings_update_checking">Controllo aggiornamenti…</string>
     <string name="settings_update_up_to_date">L\'app è aggiornata.</string>
     <string name="settings_update_check_failed">Impossibile raggiungere GitHub.</string>
@@ -578,7 +577,6 @@ Ogni tasto può essere configurato come Keycode, Azione, Native Ctrl o Nessuno. 
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
     
     <!-- Settings Categories -->
-    <string name="settings_category_keyboard_timing">Tastiera &amp; Temporizzazione</string>
     <string name="settings_category_text_input">Smart Features</string>
     <string name="settings_category_accessibility">Accessibilità</string>
     <string name="settings_category_auto_correction">Auto-correzione</string>

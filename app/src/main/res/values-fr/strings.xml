@@ -239,7 +239,6 @@
     <string name="settings_support_ko_fi">Soutenir sur Ko-fi</string>
     <string name="settings_nav_mode_configure">Configurer les mappages des touches du mode navigation</string>
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
-    <string name="settings_category_keyboard_timing">Clavier &amp; Temporisation</string>
     <string name="settings_category_text_input">Saisie de Texte</string>
     <string name="settings_category_accessibility">Accessibilité</string>
     <string name="settings_category_auto_correction">Auto-correction</string>
@@ -473,7 +472,6 @@
     <string name="languages_no_available">Toutes les langues disponibles sont déjà ajoutées ou sont des langues système.</string>
     <string name="settings_update_section_title">Mises à jour</string>
     <string name="settings_update_section_description">Vérifier la dernière version sur GitHub.</string>
-    <string name="settings_update_button">Vérifier les mises à jour</string>
     <string name="settings_update_checking">Vérification des mises à jour…</string>
     <string name="settings_update_up_to_date">L’application est à jour.</string>
     <string name="settings_update_check_failed">Impossible de joindre GitHub.</string>

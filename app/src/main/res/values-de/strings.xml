@@ -720,7 +720,6 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="settings_support_ko_fi">Auf Ko-fi unterstützen</string>
     <string name="settings_nav_mode_configure">Tastenzuordnungen für Navigationsmodus konfigurieren</string>
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
-    <string name="settings_category_keyboard_timing">Tastenverhalten &amp; Timing</string>
     <string name="settings_category_text_input">Texteingabe</string>
     <string name="settings_category_accessibility">Barrierefreiheit</string>
     <string name="settings_category_auto_correction">Autokorrektur</string>
@@ -1175,7 +1174,6 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="emoji_category_emoticons">Emoticons</string>
     <string name="settings_update_section_title">Updates</string>
     <string name="settings_update_section_description">Neueste Veröffentlichung auf GitHub prüfen.</string>
-    <string name="settings_update_button">Nach Updates suchen</string>
     <string name="settings_update_checking">Suche nach Updates…</string>
     <string name="settings_update_up_to_date">App ist auf dem neuesten Stand.</string>
     <string name="settings_update_check_failed">GitHub konnte nicht erreicht werden.</string>

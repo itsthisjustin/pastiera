@@ -293,7 +293,6 @@
     <string name="settings_nav_mode_configure">Cấu hình ánh xạ phím chế độ điều hướng</string>
     <string name="settings_update_section_title">Cập nhật</string>
     <string name="settings_update_section_description">Kiểm tra bản phát hành mới nhất trên GitHub.</string>
-    <string name="settings_update_button">Kiểm tra cập nhật</string>
     <string name="settings_update_checking">Đang kiểm tra cập nhật…</string>
     <string name="settings_update_up_to_date">Ứng dụng đã được cập nhật.</string>
     <string name="settings_update_check_failed">Không thể kết nối GitHub.</string>
@@ -303,7 +302,6 @@
     <string name="update_dialog_later">Để sau</string>
     <string name="update_dialog_download_apk">Tải APK</string>
     <string name="auto_correct_ricette_pastiera_name">Ricette Pastiera</string>
-    <string name="settings_category_keyboard_timing">Bàn phím &amp; Thời gian</string>
     <string name="settings_category_text_input">Tính năng thông minh</string>
     <string name="settings_category_accessibility">Trợ năng</string>
     <string name="settings_category_auto_correction">Sửa tự động</string>
