@@ -117,6 +117,17 @@ fun AdvancedSettingsScreen(
     val currentDestination by remember {
         derivedStateOf { navigationStack.last() }
     }
+    val highlightedSettingId = LocalSettingHighlightId.current
+
+    LaunchedEffect(highlightedSettingId) {
+        if (
+            highlightedSettingId in TRACKPAD_SETTING_LINK_IDS &&
+            navigationStack.last() != AdvancedDestination.TrackpadGestures
+        ) {
+            navigationDirection = AdvancedNavigationDirection.Push
+            navigationStack.add(AdvancedDestination.TrackpadGestures)
+        }
+    }
     
     // Listen to SharedPreferences changes to update UI when values are restored
     DisposableEffect(prefs) {
@@ -798,3 +809,13 @@ private enum class AdvancedNavigationDirection {
     Push,
     Pop
 }
+
+private val TRACKPAD_SETTING_LINK_IDS = setOf(
+    SettingLinkIds.TRACKPAD_GESTURES_ENABLED,
+    SettingLinkIds.TRACKPAD_PROVIDER,
+    SettingLinkIds.TRACKPAD_SHIZUKU_DEVICE,
+    SettingLinkIds.TRACKPAD_SENSITIVITY,
+    SettingLinkIds.TRACKPAD_SUGGESTION_SWIPE_THRESHOLD,
+    SettingLinkIds.TRACKPAD_DELETE_SWIPE_THRESHOLD,
+    SettingLinkIds.TRACKPAD_DEBUG
+)

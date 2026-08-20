@@ -92,6 +92,15 @@ object SettingLinkIds {
     const val ADVANCED_SHOW_TUTORIAL = "advanced.show_tutorial"
     const val ADVANCED_SHOW_RELEASE_NOTES_TUTORIAL = "advanced.show_release_notes_tutorial"
 
+    // Trackpad gesture screen
+    const val TRACKPAD_GESTURES_ENABLED = "trackpad.gestures_enabled"
+    const val TRACKPAD_PROVIDER = "trackpad.provider"
+    const val TRACKPAD_SHIZUKU_DEVICE = "trackpad.shizuku_device"
+    const val TRACKPAD_SENSITIVITY = "trackpad.sensitivity"
+    const val TRACKPAD_SUGGESTION_SWIPE_THRESHOLD = "trackpad.suggestion_swipe_threshold"
+    const val TRACKPAD_DELETE_SWIPE_THRESHOLD = "trackpad.delete_swipe_threshold"
+    const val TRACKPAD_DEBUG = "trackpad.debug"
+
     // Modifiers screen
     const val MODIFIERS_LONG_PRESS_MODIFIER = "modifiers.long_press_modifier"
     const val MODIFIERS_LONG_PRESS_THRESHOLD = "modifiers.long_press_threshold"
@@ -159,7 +168,8 @@ enum class SettingAvailability {
     FrenchPunctuationSpacingEnabled,
     TextReplacementsEnabled,
     AutoReplaceEnabled,
-    CtrlTapLatchesEnabled
+    CtrlTapLatchesEnabled,
+    TrackpadShizukuProvider
 }
 
 data class SettingEntry(
@@ -182,6 +192,8 @@ data class SettingEntry(
             SettingsManager.getAutoReplaceOnSpaceEnter(context)
         SettingAvailability.CtrlTapLatchesEnabled ->
             SettingsManager.getCtrlTapLatches(context)
+        SettingAvailability.TrackpadShizukuProvider ->
+            SettingsManager.getTrackpadProvider(context) == SettingsManager.TRACKPAD_PROVIDER_SHIZUKU
     }
 }
 
@@ -621,6 +633,49 @@ object SettingLinkRegistry {
             SettingLinkIds.ADVANCED_SHOW_RELEASE_NOTES_TUTORIAL,
             R.string.tutorial_show_release_notes,
             R.string.tutorial_show_release_notes_description,
+            destination = SettingsDestination.Advanced
+        ),
+
+        entry(
+            SettingLinkIds.TRACKPAD_GESTURES_ENABLED,
+            R.string.trackpad_gestures_enabled_title,
+            R.string.trackpad_gestures_enabled_description,
+            destination = SettingsDestination.Advanced
+        ),
+        entry(
+            SettingLinkIds.TRACKPAD_PROVIDER,
+            R.string.trackpad_provider_title,
+            destination = SettingsDestination.Advanced
+        ),
+        entry(
+            SettingLinkIds.TRACKPAD_SHIZUKU_DEVICE,
+            R.string.trackpad_shizuku_device_title,
+            destination = SettingsDestination.Advanced,
+            availability = SettingAvailability.TrackpadShizukuProvider,
+            unavailableFallbackId = SettingLinkIds.TRACKPAD_PROVIDER
+        ),
+        entry(
+            SettingLinkIds.TRACKPAD_SENSITIVITY,
+            R.string.trackpad_sensitivity_title,
+            R.string.trackpad_sensitivity_description,
+            destination = SettingsDestination.Advanced
+        ),
+        entry(
+            SettingLinkIds.TRACKPAD_SUGGESTION_SWIPE_THRESHOLD,
+            R.string.trackpad_suggestion_swipe_threshold_title,
+            R.string.trackpad_suggestion_swipe_threshold_description,
+            destination = SettingsDestination.Advanced
+        ),
+        entry(
+            SettingLinkIds.TRACKPAD_DELETE_SWIPE_THRESHOLD,
+            R.string.trackpad_delete_swipe_threshold_title,
+            R.string.trackpad_delete_swipe_threshold_description,
+            destination = SettingsDestination.Advanced
+        ),
+        entry(
+            SettingLinkIds.TRACKPAD_DEBUG,
+            R.string.trackpad_debug_title,
+            R.string.trackpad_debug_description,
             destination = SettingsDestination.Advanced
         ),
 

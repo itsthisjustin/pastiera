@@ -63,6 +63,7 @@ fun TrackpadGestureSettingsScreen(
     var swipeToDelete by remember { mutableStateOf(SettingsManager.getSwipeToDelete(context)) }
     var swipeToDeleteProvider by remember { mutableStateOf(SettingsManager.getSwipeToDeleteProvider(context)) }
     var swipeToDeleteProviderMenuExpanded by remember { mutableStateOf(false) }
+    val highlightedSettingId = LocalSettingHighlightId.current
     val trackpadProviderOptions = listOf(
         SettingsManager.TRACKPAD_PROVIDER_NATIVE_IME to stringResource(R.string.trackpad_provider_native_ime),
         SettingsManager.TRACKPAD_PROVIDER_SHIZUKU to stringResource(R.string.trackpad_provider_shizuku)
@@ -77,6 +78,17 @@ fun TrackpadGestureSettingsScreen(
             showSensitivitySettings = false
         } else {
             onBack()
+        }
+    }
+    LaunchedEffect(highlightedSettingId) {
+        when (highlightedSettingId) {
+            SettingLinkIds.TRACKPAD_SUGGESTION_SWIPE_THRESHOLD,
+            SettingLinkIds.TRACKPAD_DELETE_SWIPE_THRESHOLD -> showSensitivitySettings = true
+            SettingLinkIds.TRACKPAD_GESTURES_ENABLED,
+            SettingLinkIds.TRACKPAD_PROVIDER,
+            SettingLinkIds.TRACKPAD_SHIZUKU_DEVICE,
+            SettingLinkIds.TRACKPAD_SENSITIVITY,
+            SettingLinkIds.TRACKPAD_DEBUG -> showSensitivitySettings = false
         }
     }
     LaunchedEffect(Unit) {
@@ -173,6 +185,7 @@ fun TrackpadGestureSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp)
+                    .settingRow(SettingLinkIds.TRACKPAD_GESTURES_ENABLED)
             ) {
                 Row(
                     modifier = Modifier
@@ -299,6 +312,7 @@ fun TrackpadGestureSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .settingRow(SettingLinkIds.TRACKPAD_PROVIDER)
             ) {
                 OutlinedTextField(
                     value = trackpadProviderOptions.firstOrNull { it.first == trackpadProvider }?.second ?: trackpadProvider,
@@ -391,6 +405,7 @@ fun TrackpadGestureSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .settingRow(SettingLinkIds.TRACKPAD_SHIZUKU_DEVICE)
                     ) {
                         OutlinedTextField(
                             value = selectedDeviceLabel,
@@ -562,7 +577,9 @@ fun TrackpadGestureSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(72.dp)
-                    .clickable { showSensitivitySettings = true }
+                    .settingRow(SettingLinkIds.TRACKPAD_SENSITIVITY) {
+                        showSensitivitySettings = true
+                    }
             ) {
                 Row(
                     modifier = Modifier
@@ -608,7 +625,7 @@ fun TrackpadGestureSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(72.dp)
-                    .clickable {
+                    .settingRow(SettingLinkIds.TRACKPAD_DEBUG) {
                         context.startActivity(Intent(context, TrackpadDebugActivity::class.java))
                     }
             ) {
@@ -762,12 +779,14 @@ private fun TrackpadSensitivitySettings(
             title = stringResource(R.string.trackpad_suggestion_swipe_threshold_title),
             description = stringResource(R.string.trackpad_suggestion_swipe_threshold_description),
             value = suggestionSwipeThreshold,
+            linkId = SettingLinkIds.TRACKPAD_SUGGESTION_SWIPE_THRESHOLD,
             onValueChange = onSuggestionSwipeThresholdChange
         )
         TrackpadSensitivitySlider(
             title = stringResource(R.string.trackpad_delete_swipe_threshold_title),
             description = stringResource(R.string.trackpad_delete_swipe_threshold_description),
             value = deleteSwipeThreshold,
+            linkId = SettingLinkIds.TRACKPAD_DELETE_SWIPE_THRESHOLD,
             onValueChange = onDeleteSwipeThresholdChange
         )
     }
@@ -778,12 +797,14 @@ private fun TrackpadSensitivitySlider(
     title: String,
     description: String,
     value: Float,
+    linkId: String,
     onValueChange: (Float) -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            .settingRow(linkId)
     ) {
         Column(
             modifier = Modifier

@@ -165,6 +165,26 @@ class SettingLinkRegistryTest {
     }
 
     @Test
+    fun trackpadDetailLinksRouteThroughAdvancedSettings() {
+        val trackpadIds = setOf(
+            SettingLinkIds.TRACKPAD_GESTURES_ENABLED,
+            SettingLinkIds.TRACKPAD_PROVIDER,
+            SettingLinkIds.TRACKPAD_SHIZUKU_DEVICE,
+            SettingLinkIds.TRACKPAD_SENSITIVITY,
+            SettingLinkIds.TRACKPAD_SUGGESTION_SWIPE_THRESHOLD,
+            SettingLinkIds.TRACKPAD_DELETE_SWIPE_THRESHOLD,
+            SettingLinkIds.TRACKPAD_DEBUG
+        )
+
+        trackpadIds.forEach { id ->
+            assertEquals(
+                SettingsDestination.Advanced,
+                requireNotNull(SettingLinkRegistry.byId(id)).route.destination
+            )
+        }
+    }
+
+    @Test
     fun softwareThemeTogglesRouteToKeysTab() {
         val toggleIds = setOf(
             SettingLinkIds.KEYBOARD_THEME_TOGGLE_SHOW_LEDS,
