@@ -79,39 +79,68 @@ enum class SettingsDestination {
  * their entry so a buried entry keeps its own destination instead of being
  * repainted by whichever sibling was opened last.
  */
-private data class SettingsStackEntry(
+internal data class SettingsStackEntry(
     val destination: SettingsDestination,
     val customizationDestination: String? = null,
     val keyboardThemeTarget: String? = null,
-    val navModeKeyCode: Int? = null
+    val navModeKeyCode: Int? = null,
+    val keyboardsDevicesDestination: KeyboardsDevicesDestination = KeyboardsDevicesDestination.Main
 )
+
+private const val SETTINGS_STACK_SAVER_VERSION = "settings-stack-v2"
+
+private fun decodeSettingsDestination(value: String): SettingsDestination? =
+    runCatching { SettingsDestination.valueOf(value) }.getOrNull()
+
+internal fun restoreSettingsStack(values: List<String>): SnapshotStateList<SettingsStackEntry> {
+    val restored = when {
+        values.firstOrNull() == SETTINGS_STACK_SAVER_VERSION ->
+            values.drop(1).chunked(5).mapNotNull { chunk ->
+                if (chunk.size != 5) return@mapNotNull null
+                val destination = decodeSettingsDestination(chunk[0]) ?: return@mapNotNull null
+                SettingsStackEntry(
+                    destination = destination,
+                    customizationDestination = chunk[1].ifEmpty { null },
+                    keyboardThemeTarget = chunk[2].ifEmpty { null },
+                    navModeKeyCode = chunk[3].ifEmpty { null }?.toIntOrNull(),
+                    keyboardsDevicesDestination = runCatching {
+                        KeyboardsDevicesDestination.valueOf(chunk[4])
+                    }.getOrDefault(KeyboardsDevicesDestination.Main)
+                )
+            }
+        values.isNotEmpty() && values.all { decodeSettingsDestination(it) != null } ->
+            values.mapNotNull(::decodeSettingsDestination).map { SettingsStackEntry(it) }
+        values.size % 4 == 0 ->
+            values.chunked(4).mapNotNull { chunk ->
+                val destination = decodeSettingsDestination(chunk[0]) ?: return@mapNotNull null
+                SettingsStackEntry(
+                    destination = destination,
+                    customizationDestination = chunk[1].ifEmpty { null },
+                    keyboardThemeTarget = chunk[2].ifEmpty { null },
+                    navModeKeyCode = chunk[3].ifEmpty { null }?.toIntOrNull()
+                )
+            }
+        else -> emptyList()
+    }
+    return mutableStateListOf<SettingsStackEntry>().apply {
+        addAll(restored.ifEmpty { listOf(SettingsStackEntry(SettingsDestination.Main)) })
+    }
+}
 
 private val settingsNavigationStackSaver =
     listSaver<SnapshotStateList<SettingsStackEntry>, String>(
         save = { stack ->
-            stack.flatMap { entry ->
+            listOf(SETTINGS_STACK_SAVER_VERSION) + stack.flatMap { entry ->
                 listOf(
                     entry.destination.name,
                     entry.customizationDestination.orEmpty(),
                     entry.keyboardThemeTarget.orEmpty(),
-                    entry.navModeKeyCode?.toString().orEmpty()
+                    entry.navModeKeyCode?.toString().orEmpty(),
+                    entry.keyboardsDevicesDestination.name
                 )
             }
         },
-        restore = { values ->
-            mutableStateListOf<SettingsStackEntry>().apply {
-                values.chunked(4).forEach { (destination, customization, themeTarget, keyCode) ->
-                    add(
-                        SettingsStackEntry(
-                            destination = SettingsDestination.valueOf(destination),
-                            customizationDestination = customization.ifEmpty { null },
-                            keyboardThemeTarget = themeTarget.ifEmpty { null },
-                            navModeKeyCode = keyCode.ifEmpty { null }?.toIntOrNull()
-                        )
-                    )
-                }
-            }
-        }
+        restore = ::restoreSettingsStack
     )
 
 /**
@@ -290,6 +319,21 @@ fun SettingsScreen(
                             SettingsActivity.CUSTOMIZATION_DESTINATION_KEYBOARD_THEME,
                             SettingsActivity.KEYBOARD_THEME_TARGET_SOFTWARE
                         )
+                    },
+                    destination = entry.keyboardsDevicesDestination,
+                    onDestinationChange = { destination ->
+                        val index = navigationStack.lastIndex
+                        if (index >= 0 && navigationStack[index] == entry) {
+                            navigationDirection =
+                                if (destination == KeyboardsDevicesDestination.Main) {
+                                    NavigationDirection.Pop
+                                } else {
+                                    NavigationDirection.Push
+                                }
+                            navigationStack[index] = entry.copy(
+                                keyboardsDevicesDestination = destination
+                            )
+                        }
                     }
                 )
             }

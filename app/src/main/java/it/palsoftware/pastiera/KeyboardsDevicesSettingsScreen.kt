@@ -35,7 +35,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,37 +47,38 @@ import it.palsoftware.pastiera.data.mappings.KeyMappingLoader
 import it.palsoftware.pastiera.inputmethod.DeviceSpecific
 import it.palsoftware.pastiera.inputmethod.SoftwareKeyboardAutoDetector
 
-private enum class KeyboardsDevicesDestination { Main, OnScreen, BuiltIn, PowerKeyboard }
+enum class KeyboardsDevicesDestination { Main, OnScreen, BuiltIn, PowerKeyboard }
 
 @Composable
 fun KeyboardsDevicesSettingsScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onNavModeSettingsClick: (Int?) -> Unit,
-    onOpenKeyboardTheme: () -> Unit
+    onOpenKeyboardTheme: () -> Unit,
+    destination: KeyboardsDevicesDestination,
+    onDestinationChange: (KeyboardsDevicesDestination) -> Unit
 ) {
-    var destination by rememberSaveable { mutableStateOf(KeyboardsDevicesDestination.Main) }
     when (destination) {
         KeyboardsDevicesDestination.Main -> KeyboardsDevicesMainScreen(
             modifier = modifier,
             onBack = onBack,
-            onOnScreen = { destination = KeyboardsDevicesDestination.OnScreen },
-            onBuiltIn = { destination = KeyboardsDevicesDestination.BuiltIn },
-            onPowerKeyboard = { destination = KeyboardsDevicesDestination.PowerKeyboard },
+            onOnScreen = { onDestinationChange(KeyboardsDevicesDestination.OnScreen) },
+            onBuiltIn = { onDestinationChange(KeyboardsDevicesDestination.BuiltIn) },
+            onPowerKeyboard = { onDestinationChange(KeyboardsDevicesDestination.PowerKeyboard) },
             onNavModeSettingsClick = onNavModeSettingsClick
         )
         KeyboardsDevicesDestination.OnScreen -> VirtualKeyboardBehaviorSettingsScreen(
             modifier = modifier,
-            onBack = { destination = KeyboardsDevicesDestination.Main },
+            onBack = { onDestinationChange(KeyboardsDevicesDestination.Main) },
             onOpenKeyboardTheme = onOpenKeyboardTheme
         )
         KeyboardsDevicesDestination.BuiltIn -> HardwareKeyboardSettingsScreen(
             modifier = modifier,
-            onBack = { destination = KeyboardsDevicesDestination.Main }
+            onBack = { onDestinationChange(KeyboardsDevicesDestination.Main) }
         )
         KeyboardsDevicesDestination.PowerKeyboard -> ClicksPowerKeyboardSettingsScreen(
             modifier = modifier,
-            onBack = { destination = KeyboardsDevicesDestination.Main }
+            onBack = { onDestinationChange(KeyboardsDevicesDestination.Main) }
         )
     }
 }
