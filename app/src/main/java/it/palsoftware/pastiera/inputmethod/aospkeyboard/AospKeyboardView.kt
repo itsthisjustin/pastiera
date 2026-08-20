@@ -28,7 +28,6 @@ import android.os.Bundle
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.accessibility.AccessibilityEvent
-import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -40,6 +39,7 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.customview.widget.ExploreByTouchHelper
 import it.palsoftware.pastiera.R
 import it.palsoftware.pastiera.SettingsManager
+import it.palsoftware.pastiera.inputmethod.NotificationHelper
 import java.util.Locale
 import kotlin.math.abs
 
@@ -632,7 +632,7 @@ class AospKeyboardView @JvmOverloads constructor(
                 longPressTriggered = false
                 invalidateKeyboard()
                 key?.let {
-                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    NotificationHelper.triggerTapHapticFeedback(this@AospKeyboardView)
                     listener?.onKeyPressSound(soundKeyCodeFor(it))
                     if (it.spec.type.isHoldModifier() && !hasSymLayerOutput(it)) {
                         heldModifierKey = it
@@ -670,7 +670,7 @@ class AospKeyboardView @JvmOverloads constructor(
                     spaceSwipeLastX = event.getX(pointerIndex)
                     spaceLongPressArmed = false
                     longPressTriggered = false
-                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    NotificationHelper.triggerTapHapticFeedback(this)
                     listener?.onKeyPressSound(soundKeyCodeFor(key))
                     if (!isModifierPreviewLayerActive()) {
                         showPreviewIfImmediate(key)
@@ -684,7 +684,7 @@ class AospKeyboardView @JvmOverloads constructor(
                 chordPointerId = event.getPointerId(pointerIndex)
                 pressedKey = key
                 longPressTriggered = false
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                NotificationHelper.triggerTapHapticFeedback(this)
                 listener?.onKeyPressSound(soundKeyCodeFor(key))
                 if (!isModifierPreviewLayerActive()) {
                     showPreviewIfImmediate(key)
@@ -1245,7 +1245,7 @@ class AospKeyboardView @JvmOverloads constructor(
     }
 
     private fun performAccessibilityKeyClick(key: Key) {
-        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        NotificationHelper.triggerTapHapticFeedback(this)
         val keyCode = soundKeyCodeFor(key)
         listener?.onKeyPressSound(keyCode)
         if (symPageLabelFor(key) != null) {

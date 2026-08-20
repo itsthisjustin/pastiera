@@ -1,7 +1,9 @@
 package it.palsoftware.pastiera.inputmethod.aospkeyboard
 
+import android.content.Context
 import android.graphics.RectF
 import android.os.Looper
+import android.os.VibratorManager
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.MotionEvent.PointerCoords
@@ -9,6 +11,7 @@ import android.view.MotionEvent.PointerProperties
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import it.palsoftware.pastiera.SettingsManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -65,6 +68,24 @@ class AospKeyboardViewTest {
             modifierUpKeyCodes += keyCode
             return true
         }
+    }
+
+    @Test
+    fun keyTouchUsesConfiguredCustomTapDuration() {
+        val context = RuntimeEnvironment.getApplication() as android.app.Application
+        SettingsManager.setTapHapticUseSystem(context, false)
+        SettingsManager.setTapHapticDurationMs(context, 40L)
+        org.robolectric.shadows.ShadowVibrator.reset()
+        val vibrator = (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+            .defaultVibrator
+        val shadowVibrator = Shadows.shadowOf(vibrator).apply { setHasVibrator(true) }
+        val view = measuredKeyboard()
+        val (x, y) = centerOfLabel(view, "a")
+
+        view.dispatchTouchEvent(motion(MotionEvent.ACTION_DOWN, x, y, 0L))
+
+        assertEquals(40L, shadowVibrator.milliseconds)
+        view.dispatchTouchEvent(motion(MotionEvent.ACTION_CANCEL, x, y, 10L))
     }
 
     @Test

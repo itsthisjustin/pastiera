@@ -55,11 +55,18 @@ object NotificationHelper {
     }
     
     /**
-     * Triggers a haptic feedback vibration.
+     * Triggers a haptic feedback vibration using the configured tap duration.
      * @param context The context to get the vibrator service
-     * @param durationMs Duration of the vibration in milliseconds (default: 70ms)
      */
-    fun triggerHapticFeedback(context: Context, durationMs: Long = 25) {
+    fun triggerHapticFeedback(context: Context) {
+        triggerFixedDurationHapticFeedback(
+            context,
+            SettingsManager.getTapHapticDurationMs(context)
+        )
+    }
+
+    /** Triggers a semantic haptic with an explicit duration for special-purpose feedback. */
+    fun triggerHapticFeedback(context: Context, durationMs: Long) {
         try {
             if (durationMs > 30 && tryModernHapticFeedback(context)) {
                 return
