@@ -30,6 +30,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import it.palsoftware.pastiera.data.layout.LayoutFileStore
+import it.palsoftware.pastiera.data.layout.LayoutFileStore.LayoutImportError
+import it.palsoftware.pastiera.data.layout.LayoutFileStore.LayoutImportResult
 import it.palsoftware.pastiera.data.layout.LayoutMappingRepository
 import it.palsoftware.pastiera.layout.OnlineLayoutsActivity
 import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils
@@ -132,20 +134,21 @@ fun KeyboardLayoutSettingsScreen(
                             obj.optString("name").takeIf { it.isNotBlank() }
                         }.getOrNull() ?: "imported_${System.currentTimeMillis()}"
                         
-                        val saved = LayoutFileStore.saveLayoutFromJson(context, layoutName, jsonString)
-                        if (saved) {
-                            refreshTrigger++            // ricarica lista layout
-                            selectedLayout = layoutName // seleziona l'importato
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    context.getString(R.string.layout_imported_successfully)
-                                )
+                        when (val importResult = LayoutFileStore.saveLayoutFromJson(context, layoutName, jsonString)) {
+                            is LayoutImportResult.Success -> {
+                                refreshTrigger++            // ricarica lista layout
+                                selectedLayout = importResult.layoutName // seleziona l'importato
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.layout_imported_successfully)
+                                    )
+                                }
                             }
-                        } else {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    context.getString(R.string.layout_import_failed)
-                                )
+                            is LayoutImportResult.Failure -> {
+                                val message = context.getString(importResult.error.messageResource())
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                }
                             }
                         }
                     }
@@ -528,6 +531,16 @@ fun KeyboardLayoutSettingsScreen(
             }
         )
     }
+}
+
+private fun LayoutImportError.messageResource(): Int = when (this) {
+    LayoutImportError.MALFORMED_JSON -> R.string.layout_import_malformed_json
+    LayoutImportError.MISSING_MAPPINGS -> R.string.layout_import_missing_mappings
+    LayoutImportError.MAPPINGS_NOT_OBJECT -> R.string.layout_import_mappings_not_object
+    LayoutImportError.EMPTY_MAPPINGS -> R.string.layout_import_empty_mappings
+    LayoutImportError.NO_SUPPORTED_MAPPINGS -> R.string.layout_import_no_supported_mappings
+    LayoutImportError.INVALID_MAPPING -> R.string.layout_import_invalid_mapping
+    LayoutImportError.WRITE_FAILED -> R.string.layout_import_write_failed
 }
 
 /**

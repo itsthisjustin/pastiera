@@ -765,6 +765,13 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="layout_import_content_description">Layout importieren</string>
     <string name="layout_imported_successfully">Layout erfolgreich importiert</string>
     <string name="layout_import_failed">Layout konnte nicht importiert werden</string>
+    <string name="layout_import_malformed_json">Die ausgewählte Datei enthält kein gültiges JSON.</string>
+    <string name="layout_import_missing_mappings">In der Layout-Datei fehlt das Objekt „mappings“.</string>
+    <string name="layout_import_mappings_not_object">Der Wert „mappings“ muss ein JSON-Objekt sein.</string>
+    <string name="layout_import_empty_mappings">Das Layout enthält keine Tastenzuordnungen.</string>
+    <string name="layout_import_no_supported_mappings">Das Layout enthält keine unterstützten Tastenzuordnungen.</string>
+    <string name="layout_import_invalid_mapping">Mindestens eine unterstützte Tastenzuordnung ist unvollständig oder ungültig.</string>
+    <string name="layout_import_write_failed">Das geprüfte Layout konnte nicht gespeichert werden.</string>
     <string name="layout_invalid_file">Ungültige Layout-Datei</string>
     <string name="layout_import_error">Fehler beim Importieren des Layouts: %1$s</string>
     <string name="layout_save_canceled">Speichern abgebrochen</string>

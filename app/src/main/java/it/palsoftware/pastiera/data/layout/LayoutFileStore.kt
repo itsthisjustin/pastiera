@@ -5,6 +5,7 @@ import android.content.res.AssetManager
 import android.util.Log
 import android.view.KeyEvent
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -70,6 +71,32 @@ object LayoutFileStore {
         code to name
     }
 
+    enum class LayoutImportError {
+        MALFORMED_JSON,
+        MISSING_MAPPINGS,
+        MAPPINGS_NOT_OBJECT,
+        EMPTY_MAPPINGS,
+        NO_SUPPORTED_MAPPINGS,
+        INVALID_MAPPING,
+        WRITE_FAILED
+    }
+
+    sealed interface LayoutImportResult {
+        data class Success(val layoutName: String) : LayoutImportResult
+        data class Failure(
+            val error: LayoutImportError,
+            val detail: String? = null
+        ) : LayoutImportResult
+    }
+
+    private sealed interface LayoutParseResult {
+        data class Success(val layout: Map<Int, LayoutMapping>) : LayoutParseResult
+        data class Failure(
+            val error: LayoutImportError,
+            val detail: String? = null
+        ) : LayoutParseResult
+    }
+
     fun getLayoutsDirectory(context: Context): File {
         return File(context.filesDir, LAYOUTS_DIR_NAME).apply {
             if (!exists()) mkdirs()
@@ -106,50 +133,106 @@ object LayoutFileStore {
     }
 
     private fun parseLayoutJson(jsonString: String): Map<Int, LayoutMapping>? {
-        return try {
-            val jsonObject = JSONObject(jsonString)
-            val mappingsObject = jsonObject.getJSONObject("mappings")
-
-            val layout = mutableMapOf<Int, LayoutMapping>()
-            val keys = mappingsObject.keys()
-            while (keys.hasNext()) {
-                val keyName = keys.next()
-                val keyCode = keyboardLayoutNameToKeyCode[keyName]
-                if (keyCode != null) {
-                    val mappingObj = mappingsObject.getJSONObject(keyName)
-                    val lowercase = mappingObj.optString("lowercase", "")
-                    val uppercase = mappingObj.optString("uppercase", "")
-                    val multiTapEnabled = mappingObj.optBoolean("multiTapEnabled", false)
-                    val taps = mutableListOf<TapMapping>()
-                    val tapsArray = mappingObj.optJSONArray("taps")
-                    if (tapsArray != null) {
-                        for (i in 0 until tapsArray.length()) {
-                            val tapObj = tapsArray.optJSONObject(i) ?: continue
-                            val tapLower = tapObj.optString("lowercase", "")
-                            val tapUpper = tapObj.optString("uppercase", "")
-                            if (tapLower.isNotEmpty() || tapUpper.isNotEmpty()) {
-                                taps.add(TapMapping(tapLower, tapUpper))
-                            }
-                        }
-                    }
-                    val normalizedTaps = if (multiTapEnabled && taps.size > 1) taps else emptyList()
-                    val normalizedMultiTapFlag = multiTapEnabled && normalizedTaps.size > 1
-                    if (lowercase.isNotEmpty() && uppercase.isNotEmpty()) {
-                        layout[keyCode] = LayoutMapping(
-                            lowercase = lowercase,
-                            uppercase = uppercase,
-                            multiTapEnabled = normalizedMultiTapFlag,
-                            taps = normalizedTaps
-                        )
-                    }
-                }
+        return when (val result = validateLayoutJson(jsonString)) {
+            is LayoutParseResult.Success -> result.layout
+            is LayoutParseResult.Failure -> {
+                Log.e(TAG, "Invalid layout JSON: ${result.error}${result.detail?.let { " ($it)" }.orEmpty()}")
+                null
             }
-            Log.d(TAG, "Parsed layout with ${layout.size} mappings")
-            layout
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing layout JSON", e)
-            null
         }
+    }
+
+    private fun validateLayoutJson(jsonString: String): LayoutParseResult {
+        val jsonObject = try {
+            JSONObject(jsonString)
+        } catch (e: Exception) {
+            return LayoutParseResult.Failure(LayoutImportError.MALFORMED_JSON, e.message)
+        }
+
+        if (!jsonObject.has("mappings")) {
+            return LayoutParseResult.Failure(LayoutImportError.MISSING_MAPPINGS)
+        }
+        val mappingsObject = jsonObject.opt("mappings") as? JSONObject
+            ?: return LayoutParseResult.Failure(LayoutImportError.MAPPINGS_NOT_OBJECT)
+        if (mappingsObject.length() == 0) {
+            return LayoutParseResult.Failure(LayoutImportError.EMPTY_MAPPINGS)
+        }
+
+        val layout = mutableMapOf<Int, LayoutMapping>()
+        val keys = mappingsObject.keys()
+        while (keys.hasNext()) {
+            val keyName = keys.next()
+            val keyCode = keyboardLayoutNameToKeyCode[keyName] ?: continue
+            val mappingObj = mappingsObject.opt(keyName) as? JSONObject
+                ?: return invalidMapping(keyName, "mapping must be an object")
+            val lowercase = mappingObj.requiredNonEmptyString("lowercase")
+                ?: return invalidMapping(keyName, "lowercase must be a non-empty string")
+            val uppercase = mappingObj.requiredNonEmptyString("uppercase")
+                ?: return invalidMapping(keyName, "uppercase must be a non-empty string")
+
+            val multiTapEnabled = when {
+                !mappingObj.has("multiTapEnabled") -> false
+                mappingObj.opt("multiTapEnabled") is Boolean -> mappingObj.getBoolean("multiTapEnabled")
+                else -> return invalidMapping(keyName, "multiTapEnabled must be a boolean")
+            }
+            val taps = when (val tapsResult = parseTaps(mappingObj, keyName)) {
+                is TapsParseResult.Success -> tapsResult.taps
+                is TapsParseResult.Failure -> return tapsResult.failure
+            }
+            if (multiTapEnabled && taps.size < 2) {
+                return invalidMapping(keyName, "multi-tap mappings require at least two non-empty taps")
+            }
+
+            layout[keyCode] = LayoutMapping(
+                lowercase = lowercase,
+                uppercase = uppercase,
+                multiTapEnabled = multiTapEnabled,
+                taps = if (multiTapEnabled) taps else emptyList()
+            )
+        }
+
+        if (layout.isEmpty()) {
+            return LayoutParseResult.Failure(LayoutImportError.NO_SUPPORTED_MAPPINGS)
+        }
+        Log.d(TAG, "Parsed layout with ${layout.size} mappings")
+        return LayoutParseResult.Success(layout)
+    }
+
+    private sealed interface TapsParseResult {
+        data class Success(val taps: List<TapMapping>) : TapsParseResult
+        data class Failure(val failure: LayoutParseResult.Failure) : TapsParseResult
+    }
+
+    private fun parseTaps(mappingObj: JSONObject, keyName: String): TapsParseResult {
+        if (!mappingObj.has("taps")) return TapsParseResult.Success(emptyList())
+        val tapsArray = mappingObj.opt("taps") as? JSONArray
+            ?: return TapsParseResult.Failure(invalidMapping(keyName, "taps must be an array"))
+        val taps = mutableListOf<TapMapping>()
+        for (index in 0 until tapsArray.length()) {
+            val tapObj = tapsArray.opt(index) as? JSONObject
+                ?: return TapsParseResult.Failure(invalidMapping(keyName, "tap $index must be an object"))
+            val tapLower = tapObj.optionalString("lowercase")
+                ?: return TapsParseResult.Failure(invalidMapping(keyName, "tap $index lowercase must be a string"))
+            val tapUpper = tapObj.optionalString("uppercase")
+                ?: return TapsParseResult.Failure(invalidMapping(keyName, "tap $index uppercase must be a string"))
+            if (tapLower.isNotEmpty() || tapUpper.isNotEmpty()) {
+                taps.add(TapMapping(tapLower, tapUpper))
+            }
+        }
+        return TapsParseResult.Success(taps)
+    }
+
+    private fun invalidMapping(keyName: String, detail: String) =
+        LayoutParseResult.Failure(LayoutImportError.INVALID_MAPPING, "$keyName: $detail")
+
+    private fun JSONObject.requiredNonEmptyString(key: String): String? {
+        val value = opt(key)
+        return (value as? String)?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun JSONObject.optionalString(key: String): String? {
+        if (!has(key)) return ""
+        return opt(key) as? String
     }
 
     fun saveLayout(
@@ -213,12 +296,14 @@ object LayoutFileStore {
         context: Context,
         layoutName: String,
         jsonString: String
-    ): Boolean {
+    ): LayoutImportResult {
         return try {
-            val layout = parseLayoutJson(jsonString)
-            if (layout == null) {
-                Log.e(TAG, "Invalid JSON format, cannot save layout: $layoutName")
-                return false
+            when (val validation = validateLayoutJson(jsonString)) {
+                is LayoutParseResult.Failure -> {
+                    Log.e(TAG, "Invalid JSON format, cannot save layout $layoutName: ${validation.error}")
+                    return LayoutImportResult.Failure(validation.error, validation.detail)
+                }
+                is LayoutParseResult.Success -> Unit
             }
 
             val layoutFile = getLayoutFile(context, layoutName)
@@ -227,10 +312,10 @@ object LayoutFileStore {
             }
 
             Log.d(TAG, "Saved layout from JSON: $layoutName to ${layoutFile.absolutePath}")
-            true
+            LayoutImportResult.Success(layoutName)
         } catch (e: Exception) {
             Log.e(TAG, "Error saving layout from JSON: $layoutName", e)
-            false
+            LayoutImportResult.Failure(LayoutImportError.WRITE_FAILED, e.message)
         }
     }
 

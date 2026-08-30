@@ -1104,6 +1104,13 @@ Each key can be configured as Keycode, Action, Native Ctrl, or None. Use overrid
     <string name="layout_import_content_description">Import layout</string>
     <string name="layout_imported_successfully">Layout imported successfully</string>
     <string name="layout_import_failed">Failed to import layout</string>
+    <string name="layout_import_malformed_json">The selected file is not valid JSON.</string>
+    <string name="layout_import_missing_mappings">The layout file is missing the mappings object.</string>
+    <string name="layout_import_mappings_not_object">The mappings value must be a JSON object.</string>
+    <string name="layout_import_empty_mappings">The layout does not contain any key mappings.</string>
+    <string name="layout_import_no_supported_mappings">The layout does not contain any supported key mappings.</string>
+    <string name="layout_import_invalid_mapping">At least one supported key mapping is incomplete or invalid.</string>
+    <string name="layout_import_write_failed">The validated layout could not be saved.</string>
     <string name="layout_invalid_file">Invalid layout file</string>
     <string name="layout_import_error">Error importing layout: %1$s</string>
     <string name="layout_save_canceled">Save canceled</string>
