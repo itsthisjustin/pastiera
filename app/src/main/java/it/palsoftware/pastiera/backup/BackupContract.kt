@@ -230,6 +230,10 @@ internal object BackupPreferenceContract {
             "swipe_to_delete_provider" to PreferenceValueType.STRING,
             "tap_haptic_use_system" to PreferenceValueType.BOOLEAN,
             "tap_haptic_duration_ms" to PreferenceValueType.LONG,
+            "typing_sound_mode" to PreferenceValueType.STRING,
+            "typing_sound_output_mode" to PreferenceValueType.STRING,
+            "typing_sound_custom_file_name" to PreferenceValueType.STRING,
+            "typing_sound_custom_display_name" to PreferenceValueType.STRING,
             "app_language_tag" to PreferenceValueType.STRING,
             "app_enter_behavior_enabled" to PreferenceValueType.BOOLEAN,
             "app_enter_behavior_preset" to PreferenceValueType.STRING,
@@ -442,6 +446,7 @@ internal object BackupPreferenceContract {
         "variations_updated" to "runtime refresh marker",
         "pastierina_mode_active" to "runtime-derived state",
         "software_keyboard_mode_runtime_override" to "runtime-derived state",
+        "typing_sound_updated_at" to "runtime refresh marker",
         "clicks_bluetooth_permission_explained" to "permission UI state",
         "clicks_manual_charging_until" to "transient runtime state"
     )

@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
@@ -21,11 +22,36 @@ object BackupManager {
     suspend fun createBackup(context: Context, targetUri: Uri): BackupResult = withContext(Dispatchers.IO) {
         val workingDir = File(context.cacheDir, "backup_${System.currentTimeMillis()}").apply { mkdirs() }
         try {
+            val customTypingSoundActive =
+                SettingsManager.getTypingSoundMode(context) == SettingsManager.TYPING_SOUND_MODE_CUSTOM
+            val hasTypingSoundPack = if (customTypingSoundActive) {
+                val storedPackName = SettingsManager.getPreferences(context).getString(
+                    SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+                    null
+                )
+                if (storedPackName != SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR) {
+                    throw IllegalStateException("Custom typing sound mode has no supported sound pack selected")
+                }
+                if (!FileBackupHelper.validateTypingSoundPack(context.filesDir)) {
+                    throw IllegalStateException("Custom typing sound mode requires a valid sound pack")
+                }
+                true
+            } else {
+                FileBackupHelper.hasValidTypingSoundPack(context.filesDir)
+            }
             val prefsDir = File(workingDir, "prefs").apply { mkdirs() }
             val filesDir = File(workingDir, "files").apply { mkdirs() }
 
-            val prefComponents = PreferencesBackupHelper.dumpSharedPreferences(context, prefsDir)
-            val fileComponents = FileBackupHelper.snapshotInternalFiles(context, filesDir)
+            val prefComponents = PreferencesBackupHelper.dumpSharedPreferences(
+                context,
+                prefsDir,
+                hasTypingSoundPack
+            )
+            val fileComponents = FileBackupHelper.snapshotInternalFiles(
+                context,
+                filesDir,
+                includeTypingSoundPack = hasTypingSoundPack
+            )
             val components = (prefComponents + fileComponents).sorted()
 
             val metadata = BackupMetadata(
@@ -68,8 +94,16 @@ data class FileRestoreSummary(
 
 object PreferencesBackupHelper {
     private const val TAG = "PreferencesBackup"
+    private val typingSoundPackPreferenceKeys = setOf(
+        SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+        SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME
+    )
 
-    fun dumpSharedPreferences(context: Context, destinationDir: File): List<String> {
+    fun dumpSharedPreferences(
+        context: Context,
+        destinationDir: File,
+        hasTypingSoundPack: Boolean = FileBackupHelper.hasValidTypingSoundPack(context.filesDir)
+    ): List<String> {
         val sharedPrefsDir = File(context.dataDir, "shared_prefs")
         if (!sharedPrefsDir.exists()) {
             return emptyList()
@@ -82,7 +116,7 @@ object PreferencesBackupHelper {
                 return@forEach
             }
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
-            val prefsJson = buildPreferencesJson(prefName, prefs)
+            val prefsJson = buildPreferencesJson(prefName, prefs, hasTypingSoundPack)
             val outFile = File(destinationDir, "$prefName.json")
             outFile.writeText(prefsJson.toString(2))
             components.add("prefs/${outFile.name}")
@@ -90,11 +124,24 @@ object PreferencesBackupHelper {
         return components
     }
 
-    private fun buildPreferencesJson(prefName: String, prefs: SharedPreferences): JSONObject {
+    private fun buildPreferencesJson(
+        prefName: String,
+        prefs: SharedPreferences,
+        hasTypingSoundPack: Boolean
+    ): JSONObject {
         val json = JSONObject()
         json.put("name", prefName)
         val entries = JSONObject()
         prefs.all.forEach { (key, value) ->
+            val requiresTypingSoundPack = prefName == "pastiera_prefs" && (
+                key in typingSoundPackPreferenceKeys ||
+                    key == SettingsManager.KEY_TYPING_SOUND_MODE &&
+                    value == SettingsManager.TYPING_SOUND_MODE_CUSTOM
+                )
+            if (requiresTypingSoundPack && !hasTypingSoundPack) {
+                Log.w(TAG, "Not exporting custom typing-sound state without a valid pack")
+                return@forEach
+            }
             val expectedType = BackupPreferenceContract.expectedExportType(prefName, key)
             if (expectedType == null) {
                 Log.i(TAG, "Not exporting unclassified or non-user preference $prefName:$key")
@@ -140,7 +187,8 @@ object PreferencesBackupHelper {
     fun restorePreferences(
         context: Context,
         backedUpPrefs: Map<String, Map<String, PreferenceValue>>,
-        excludedKeys: Set<String> = emptySet()
+        excludedKeys: Set<String> = emptySet(),
+        hasRestoredTypingSoundPack: Boolean = false
     ): PreferencesRestoreSummary {
         val applied = mutableListOf<String>()
         val skipped = mutableListOf<String>()
@@ -159,6 +207,17 @@ object PreferencesBackupHelper {
                 val recognized = PreferenceSchemas.isRecognized(prefName, key)
                 if (!recognized) {
                     Log.w(TAG, "Ignoring unknown preference key $key for $prefName")
+                    skipped.add(qualifiedKey)
+                    return@forEach
+                }
+
+                if (!isTypingSoundPreferenceRestorable(
+                        prefName,
+                        key,
+                        value,
+                        hasRestoredTypingSoundPack
+                    )
+                ) {
                     skipped.add(qualifiedKey)
                     return@forEach
                 }
@@ -193,6 +252,23 @@ object PreferencesBackupHelper {
 
         return PreferencesRestoreSummary(appliedKeys = applied, skippedKeys = skipped)
     }
+
+    private fun isTypingSoundPreferenceRestorable(
+        prefName: String,
+        key: String,
+        value: PreferenceValue,
+        hasRestoredTypingSoundPack: Boolean
+    ): Boolean {
+        if (prefName != "pastiera_prefs") return true
+        return when (key) {
+            SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME ->
+                value.value == SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR && hasRestoredTypingSoundPack
+            SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME -> hasRestoredTypingSoundPack
+            SettingsManager.KEY_TYPING_SOUND_MODE ->
+                value.value != SettingsManager.TYPING_SOUND_MODE_CUSTOM || hasRestoredTypingSoundPack
+            else -> true
+        }
+    }
 }
 
 object FileBackupHelper {
@@ -207,7 +283,11 @@ object FileBackupHelper {
         "keyboard_layouts"
     )
 
-    fun snapshotInternalFiles(context: Context, destinationDir: File): List<String> {
+    fun snapshotInternalFiles(
+        context: Context,
+        destinationDir: File,
+        includeTypingSoundPack: Boolean = hasValidTypingSoundPack(context.filesDir)
+    ): List<String> {
         val base = context.filesDir
         if (!base.exists()) {
             return emptyList()
@@ -218,7 +298,7 @@ object FileBackupHelper {
             .filter { it.isFile }
             .forEach { file ->
                 val relative = file.toRelativeString(base).replace("\\", "/")
-                if (!shouldBackupPath(relative)) {
+                if (!shouldBackupPath(relative, includeTypingSoundPack)) {
                     return@forEach
                 }
                 val target = File(destinationDir, relative)
@@ -238,6 +318,7 @@ object FileBackupHelper {
             ensureDefaults(context)
             return FileRestoreSummary(restoredFiles = restored, skippedFiles = skipped)
         }
+        validateTypingSoundPack(extractedFilesDir)
 
         val targetRoot = context.filesDir
         val backups = mutableListOf<Pair<File, File>>()
@@ -247,7 +328,10 @@ object FileBackupHelper {
                 .filter { it.isFile }
                 .forEach { source ->
                     val relative = source.toRelativeString(extractedFilesDir).replace("\\", "/")
-                    if (!shouldBackupPath(relative)) {
+                    if (isTypingSoundPackPath(relative)) {
+                        return@forEach
+                    }
+                    if (!shouldBackupPath(relative, includeTypingSoundPack = true)) {
                         skipped.add(relative)
                         return@forEach
                     }
@@ -275,6 +359,13 @@ object FileBackupHelper {
                     }
                     restored.add(relative)
                 }
+            restored.addAll(
+                replaceTypingSoundPack(
+                    targetRoot = targetRoot,
+                    rollbackRoot = context.cacheDir,
+                    extractedFilesRoot = extractedFilesDir
+                )
+            )
         } catch (e: Exception) {
             backups.reversed().forEach { (target, backup) ->
                 runCatching { backup.copyTo(target, overwrite = true) }
@@ -291,14 +382,120 @@ object FileBackupHelper {
         return FileRestoreSummary(restoredFiles = restored, skippedFiles = skipped)
     }
 
-    private fun shouldBackupPath(relative: String): Boolean {
+    internal fun replaceTypingSoundPack(
+        targetRoot: File,
+        rollbackRoot: File,
+        extractedFilesRoot: File,
+        installStagedPack: (File, File) -> Unit = { staging, target ->
+            if (!staging.renameTo(target) && !staging.copyRecursively(target, overwrite = true)) {
+                throw IOException("Unable to install restored typing sound pack")
+            }
+        }
+    ): List<String> {
+        if (!validateTypingSoundPack(extractedFilesRoot)) return emptyList()
+
+        val relativePackPath =
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}"
+        val sourcePack = File(extractedFilesRoot, relativePackPath)
+        val targetSoundRoot = File(targetRoot, SettingsManager.TYPING_SOUND_CUSTOM_DIR).apply { mkdirs() }
+        val targetPack = File(targetSoundRoot, SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR)
+        val uniqueSuffix = System.nanoTime().toString()
+        val stagingPack = File(targetSoundRoot, "${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}_restore_$uniqueSuffix")
+        val rollbackPack = File(rollbackRoot, "typing_sound_pack_rollback_$uniqueSuffix")
+        val restoredPaths = sourcePack.walkTopDown()
+            .filter(File::isFile)
+            .map { file -> file.toRelativeString(extractedFilesRoot).replace("\\", "/") }
+            .toList()
+
+        try {
+            if (!sourcePack.copyRecursively(stagingPack, overwrite = true)) {
+                throw IOException("Unable to stage restored typing sound pack")
+            }
+            if (targetPack.exists() && !targetPack.copyRecursively(rollbackPack, overwrite = true)) {
+                throw IOException("Unable to preserve existing typing sound pack")
+            }
+
+            try {
+                if (targetPack.exists() && !targetPack.deleteRecursively()) {
+                    throw IOException("Unable to remove existing typing sound pack")
+                }
+                installStagedPack(stagingPack, targetPack)
+            } catch (error: Exception) {
+                targetPack.deleteRecursively()
+                if (rollbackPack.exists() && !rollbackPack.copyRecursively(targetPack, overwrite = true)) {
+                    error.addSuppressed(IOException("Unable to roll back existing typing sound pack"))
+                }
+                throw error
+            }
+            return restoredPaths
+        } finally {
+            stagingPack.deleteRecursively()
+            rollbackPack.deleteRecursively()
+        }
+    }
+
+    private fun shouldBackupPath(relative: String, includeTypingSoundPack: Boolean): Boolean {
         val normalized = relative.removePrefix("./")
         if (allowedFiles.contains(normalized)) {
+            return true
+        }
+        if (includeTypingSoundPack && isTypingSoundPackPath(normalized)) {
             return true
         }
         return allowedDirectories.any { dir ->
             normalized == dir || normalized.startsWith("$dir/")
         }
+    }
+
+    internal fun hasValidTypingSoundPack(root: File): Boolean =
+        runCatching { validateTypingSoundPack(root) }.getOrDefault(false)
+
+    internal fun validateTypingSoundPack(root: File): Boolean {
+        val typingSoundRoot = File(root, SettingsManager.TYPING_SOUND_CUSTOM_DIR)
+        if (!typingSoundRoot.exists()) return false
+
+        val canonicalRootPath = typingSoundRoot.canonicalFile.toPath()
+        val files = typingSoundRoot.walkTopDown().filter(File::isFile).toList()
+        if (files.isEmpty()) return false
+        if (files.size > SettingsManager.TYPING_SOUND_MAX_PACK_FILES) {
+            throw IllegalArgumentException("Typing sound pack has too many files")
+        }
+
+        var totalBytes = 0L
+        var hasNormalSound = false
+        files.forEach { file ->
+            val canonicalFilePath = file.canonicalFile.toPath()
+            if (!canonicalFilePath.startsWith(canonicalRootPath)) {
+                throw IllegalArgumentException("Typing sound pack escapes its storage directory")
+            }
+            val relative = file.toRelativeString(root).replace("\\", "/")
+            if (!isTypingSoundPackPath(relative)) {
+                throw IllegalArgumentException("Unsupported typing sound pack path: $relative")
+            }
+            if (file.length() > SettingsManager.TYPING_SOUND_MAX_FILE_BYTES) {
+                throw IllegalArgumentException("Typing sound pack file exceeds size limit")
+            }
+            totalBytes += file.length()
+            if (totalBytes > SettingsManager.TYPING_SOUND_MAX_PACK_BYTES) {
+                throw IllegalArgumentException("Typing sound pack exceeds total size limit")
+            }
+            if (relative.split('/')[2] == "normal") {
+                hasNormalSound = true
+            }
+        }
+        if (!hasNormalSound) {
+            throw IllegalArgumentException("Typing sound pack has no normal-key sound")
+        }
+        return true
+    }
+
+    private fun isTypingSoundPackPath(relative: String): Boolean {
+        val parts = relative.split('/')
+        return parts.size == 4 &&
+            parts[0] == SettingsManager.TYPING_SOUND_CUSTOM_DIR &&
+            parts[1] == SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR &&
+            parts[2] in SettingsManager.TYPING_SOUND_GROUPS &&
+            parts[3].substringAfterLast('.', "").lowercase() in SettingsManager.TYPING_SOUND_AUDIO_EXTENSIONS
     }
 
     private fun isJsonValid(file: File): Boolean {

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import it.palsoftware.pastiera.DeviceIdentitySnapshot
 import it.palsoftware.pastiera.AppBroadcastActions
+import it.palsoftware.pastiera.SettingsManager
 import it.palsoftware.pastiera.inputmethod.DeviceSpecific
 import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils
 import kotlinx.coroutines.Dispatchers
@@ -103,7 +104,13 @@ object RestoreManager {
             val prefsSummary = PreferencesBackupHelper.restorePreferences(
                 context,
                 prefsData,
-                excludedKeys = excludedKeys
+                excludedKeys = excludedKeys,
+                hasRestoredTypingSoundPack = fileSummary.restoredFiles.any { path ->
+                    path.startsWith(
+                        "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/" +
+                            "${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/"
+                    )
+                }
             )
             val postRestoreActions = collectTriggeredPostRestoreActions(prefsSummary, fileSummary)
             notifyPostRestoreEffects(context, postRestoreActions)

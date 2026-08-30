@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -16,6 +17,9 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.FileInputStream
+import java.io.IOException
+import java.io.RandomAccessFile
+import java.lang.reflect.Modifier
 import java.util.zip.ZipInputStream
 
 @RunWith(RobolectricTestRunner::class)
@@ -35,6 +39,7 @@ class BackupPreferenceContractIntegrationTest {
         ).forEach { prefName ->
             context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit().clear().commit()
         }
+        File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).deleteRecursively()
     }
 
     @Test
@@ -79,6 +84,15 @@ class BackupPreferenceContractIntegrationTest {
         SettingsManager.setAppEnterBehaviorOverrides(context, listOf(enterOverride))
         SettingsManager.setNavModeCtrlHoldEnabled(context, true)
         SettingsManager.setDynamicVariationBarResizeToContent(context, true)
+        SettingsManager.setTypingSoundMode(context, SettingsManager.TYPING_SOUND_MODE_CUSTOM)
+        SettingsManager.setTypingSoundOutputMode(context, SettingsManager.TYPING_SOUND_OUTPUT_NOTIFICATION)
+        val typingSoundFile = File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/normal/001.ogg"
+        ).apply {
+            parentFile?.mkdirs()
+            writeText("contract-normal-sound")
+        }
         SettingsManager.getPreferences(context).edit()
             .putString("user_dictionary_entries", "[\"ContractWord\"]")
             .putString("auto_correct_custom_de", "{\"ctr\":\"ContractReplacement\"}")
@@ -91,6 +105,12 @@ class BackupPreferenceContractIntegrationTest {
             .putBoolean("quick_launcher_default_assigned", true)
             .putFloat("keyboard_theme_preview_viewport_scale", 1.4f)
             .putBoolean("pastierina_mode_active", true)
+            .putString(
+                SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+                SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR
+            )
+            .putString(SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME, "Contract sounds.zip")
+            .putLong(SettingsManager.KEY_TYPING_SOUND_UPDATED_AT, 123L)
             .commit()
         context.getSharedPreferences("app_list_cache_prefs", Context.MODE_PRIVATE).edit()
             .putInt("package_change_sequence", 42)
@@ -108,13 +128,19 @@ class BackupPreferenceContractIntegrationTest {
         assertFalse(zipEntries.containsKey("prefs/app_list_cache_prefs.json"))
         assertFalse(zipEntries.containsKey("prefs/perf_img_scale.json"))
         assertFalse(zipEntries.containsKey("prefs/recent_emojis_prefs.json"))
+        assertEquals(
+            "contract-normal-sound",
+            zipEntries.getValue("files/typing_sounds/custom_pack/normal/001.ogg")
+        )
         val exportedEntries = JSONObject(zipEntries.getValue("prefs/pastiera_prefs.json"))
             .getJSONObject("entries")
         BackupPreferenceContract.deliberatelyExcludedPastieraKeys.keys.forEach { excludedKey ->
             assertFalse("Excluded key was exported: $excludedKey", exportedEntries.has(excludedKey))
         }
+        assertFalse(exportedEntries.has(SettingsManager.KEY_TYPING_SOUND_UPDATED_AT))
 
         SettingsManager.getPreferences(context).edit().clear().commit()
+        File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).deleteRecursively()
         val restoreResult = RestoreManager.restore(context, Uri.fromFile(backupZip))
         val restored = restoreResult as RestoreResult.Success
 
@@ -163,6 +189,18 @@ class BackupPreferenceContractIntegrationTest {
             SettingsManager.getPreferences(context).getString("auto_correct_custom_de", null)
         )
         assertEquals("de-DE", SettingsManager.getAppLanguageTag(context))
+        assertEquals(SettingsManager.TYPING_SOUND_MODE_CUSTOM, SettingsManager.getTypingSoundMode(context))
+        assertEquals(
+            SettingsManager.TYPING_SOUND_OUTPUT_NOTIFICATION,
+            SettingsManager.getTypingSoundOutputMode(context)
+        )
+        assertEquals("Contract sounds.zip", SettingsManager.getTypingSoundCustomDisplayName(context))
+        assertEquals(
+            "contract-normal-sound",
+            SettingsManager.getTypingSoundCustomGroupFiles(context).getValue("normal").single().readText()
+        )
+        assertFalse(SettingsManager.getPreferences(context).contains(SettingsManager.KEY_TYPING_SOUND_UPDATED_AT))
+        assertTrue(typingSoundFile.parentFile?.isDirectory == true)
     }
 
     @Test
@@ -177,7 +215,11 @@ class BackupPreferenceContractIntegrationTest {
             "app_enter_behavior_preset" to PreferenceValueType.STRING,
             "app_enter_behavior_overrides" to PreferenceValueType.STRING,
             "nav_mode_ctrl_hold_enabled" to PreferenceValueType.BOOLEAN,
-            "dynamic_variation_bar_resize_to_content" to PreferenceValueType.BOOLEAN
+            "dynamic_variation_bar_resize_to_content" to PreferenceValueType.BOOLEAN,
+            "typing_sound_mode" to PreferenceValueType.STRING,
+            "typing_sound_output_mode" to PreferenceValueType.STRING,
+            "typing_sound_custom_file_name" to PreferenceValueType.STRING,
+            "typing_sound_custom_display_name" to PreferenceValueType.STRING
         )
 
         expectedUserTypes.forEach { (key, type) ->
@@ -192,7 +234,8 @@ class BackupPreferenceContractIntegrationTest {
             "last_seen_whats_new_version",
             "nav_mode_default_mappings_version",
             "quick_launcher_default_assigned",
-            "keyboard_theme_preview_viewport_scale"
+            "keyboard_theme_preview_viewport_scale",
+            "typing_sound_updated_at"
         ).forEach { key ->
             assertTrue(BackupPreferenceContract.deliberatelyExcludedPastieraKeys.containsKey(key))
             assertFalse(BackupPreferenceContract.isExportable("pastiera_prefs", key))
@@ -201,6 +244,296 @@ class BackupPreferenceContractIntegrationTest {
             PreferenceValueType.STRING,
             BackupPreferenceContract.expectedExportType("pastiera_prefs", "auto_correct_custom_de")
         )
+    }
+
+    @Test
+    fun everySettingsManagerPreferenceKey_isExportedOrDeliberatelyExcluded() {
+        val preferenceKeys = SettingsManager::class.java.declaredFields
+            .asSequence()
+            .filter { field ->
+                Modifier.isStatic(field.modifiers) &&
+                    field.name.startsWith("KEY_") &&
+                    field.type == String::class.java
+            }
+            .map { field ->
+                field.isAccessible = true
+                field.get(null) as String
+            }
+            .toSet()
+
+        val unclassified = preferenceKeys.filterNot { key ->
+            BackupPreferenceContract.isExportable("pastiera_prefs", key) ||
+                BackupPreferenceContract.deliberatelyExcludedPastieraKeys.containsKey(key)
+        }
+
+        assertTrue("Unclassified SettingsManager KEY_* values: $unclassified", unclassified.isEmpty())
+    }
+
+    @Test
+    fun typingSoundRestore_rejectsUnsupportedPackBeforeTargetMutation() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_invalid_restore").apply {
+            deleteRecursively()
+        }
+        val invalid = File(extractedFiles, "typing_sounds/custom_pack/normal/payload.exe").apply {
+            parentFile?.mkdirs()
+            writeText("not-a-supported-audio-file")
+        }
+        val targetPack = File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR)
+
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FileBackupHelper.restoreFiles(context, extractedFiles)
+            }
+            assertTrue(invalid.exists())
+            assertFalse(targetPack.exists())
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun typingSoundRestore_rejectsFileAboveImportLimit() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_oversized_restore").apply {
+            deleteRecursively()
+        }
+        val oversized = File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
+            parentFile?.mkdirs()
+        }
+        RandomAccessFile(oversized, "rw").use { file ->
+            file.setLength(SettingsManager.TYPING_SOUND_MAX_FILE_BYTES + 1L)
+        }
+
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FileBackupHelper.restoreFiles(context, extractedFiles)
+            }
+            assertFalse(File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).exists())
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun activeCustomTypingSound_withoutValidPackFailsBackup() = runBlocking {
+        SettingsManager.setTypingSoundMode(context, SettingsManager.TYPING_SOUND_MODE_CUSTOM)
+        SettingsManager.getPreferences(context).edit()
+            .putString(
+                SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+                SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR
+            )
+            .putString(SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME, "Missing.zip")
+            .commit()
+        val missingPackBackup = File.createTempFile("missing_typing_sound_", ".zip", context.cacheDir)
+
+        val missingResult = BackupManager.createBackup(context, Uri.fromFile(missingPackBackup))
+
+        assertTrue(missingResult is BackupResult.Failure)
+
+        File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/normal/payload.exe"
+        ).apply {
+            parentFile?.mkdirs()
+            writeText("invalid")
+        }
+        val invalidPackBackup = File.createTempFile("invalid_typing_sound_", ".zip", context.cacheDir)
+
+        val invalidResult = BackupManager.createBackup(context, Uri.fromFile(invalidPackBackup))
+
+        assertTrue(invalidResult is BackupResult.Failure)
+    }
+
+    @Test
+    fun inactiveInvalidTypingSoundPack_isOmittedWithoutFailingBackup() = runBlocking {
+        SettingsManager.setTypingSoundMode(context, SettingsManager.TYPING_SOUND_MODE_CLICK)
+        SettingsManager.setTypingSoundOutputMode(context, SettingsManager.TYPING_SOUND_OUTPUT_SYSTEM)
+        SettingsManager.getPreferences(context).edit()
+            .putString(
+                SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+                SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR
+            )
+            .putString(SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME, "Orphaned.zip")
+            .commit()
+        File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/normal/payload.exe"
+        ).apply {
+            parentFile?.mkdirs()
+            writeText("invalid")
+        }
+        val backupZip = File.createTempFile("inactive_typing_sound_", ".zip", context.cacheDir)
+
+        val result = BackupManager.createBackup(context, Uri.fromFile(backupZip))
+        val entries = readZipEntries(backupZip)
+        val exportedPrefs = JSONObject(entries.getValue("prefs/pastiera_prefs.json"))
+            .getJSONObject("entries")
+
+        assertTrue(result is BackupResult.Success)
+        assertTrue(entries.keys.none { it.startsWith("files/typing_sounds/") })
+        assertEquals(
+            SettingsManager.TYPING_SOUND_MODE_CLICK,
+            exportedPrefs.getJSONObject(SettingsManager.KEY_TYPING_SOUND_MODE).getString("value")
+        )
+        assertEquals(
+            SettingsManager.TYPING_SOUND_OUTPUT_SYSTEM,
+            exportedPrefs.getJSONObject(SettingsManager.KEY_TYPING_SOUND_OUTPUT_MODE).getString("value")
+        )
+        assertFalse(exportedPrefs.has(SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME))
+        assertFalse(exportedPrefs.has(SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME))
+    }
+
+    @Test
+    fun restoreWithoutPack_doesNotApplyCustomPrefsFromTargetState() {
+        val preferences = SettingsManager.getPreferences(context)
+        File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/normal/001.ogg"
+        ).apply {
+            parentFile?.mkdirs()
+            writeText("existing-pack")
+        }
+        preferences.edit()
+            .putString(SettingsManager.KEY_TYPING_SOUND_MODE, SettingsManager.TYPING_SOUND_MODE_CUSTOM)
+            .putString(
+                SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+                SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR
+            )
+            .putString(SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME, "Existing.zip")
+            .commit()
+
+        val summary = PreferencesBackupHelper.restorePreferences(
+            context,
+            mapOf(
+                "pastiera_prefs" to mapOf(
+                    SettingsManager.KEY_TYPING_SOUND_MODE to PreferenceValue(
+                        PreferenceValueType.STRING,
+                        SettingsManager.TYPING_SOUND_MODE_CUSTOM
+                    ),
+                    SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME to PreferenceValue(
+                        PreferenceValueType.STRING,
+                        SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR
+                    ),
+                    SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME to PreferenceValue(
+                        PreferenceValueType.STRING,
+                        "Backup-without-pack.zip"
+                    ),
+                    SettingsManager.KEY_TYPING_SOUND_OUTPUT_MODE to PreferenceValue(
+                        PreferenceValueType.STRING,
+                        SettingsManager.TYPING_SOUND_OUTPUT_NOTIFICATION
+                    )
+                )
+            ),
+            hasRestoredTypingSoundPack = false
+        )
+
+        assertEquals(
+            setOf("pastiera_prefs:${SettingsManager.KEY_TYPING_SOUND_OUTPUT_MODE}"),
+            summary.appliedKeys.toSet()
+        )
+        assertEquals(
+            setOf(
+                "pastiera_prefs:${SettingsManager.KEY_TYPING_SOUND_MODE}",
+                "pastiera_prefs:${SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME}",
+                "pastiera_prefs:${SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME}"
+            ),
+            summary.skippedKeys.toSet()
+        )
+        assertEquals("Existing.zip", SettingsManager.getTypingSoundCustomDisplayName(context))
+        assertEquals(SettingsManager.TYPING_SOUND_MODE_CUSTOM, SettingsManager.getTypingSoundMode(context))
+        assertEquals(
+            SettingsManager.TYPING_SOUND_OUTPUT_NOTIFICATION,
+            SettingsManager.getTypingSoundOutputMode(context)
+        )
+    }
+
+    @Test
+    fun typingSoundRestore_replacesExistingPackAsAUnit() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_replace_restore").apply {
+            deleteRecursively()
+        }
+        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
+            parentFile?.mkdirs()
+            writeText("new-normal")
+        }
+        val targetPack = File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}"
+        )
+        File(targetPack, "normal/old.ogg").apply {
+            parentFile?.mkdirs()
+            writeText("old-normal")
+        }
+        File(targetPack, "space/old.wav").apply {
+            parentFile?.mkdirs()
+            writeText("old-space")
+        }
+
+        try {
+            val summary = FileBackupHelper.restoreFiles(context, extractedFiles)
+
+            assertEquals(
+                setOf("typing_sounds/custom_pack/normal/001.ogg"),
+                summary.restoredFiles.toSet()
+            )
+            assertEquals(
+                setOf("normal/001.ogg"),
+                targetPack.walkTopDown()
+                    .filter(File::isFile)
+                    .map { it.toRelativeString(targetPack).replace("\\", "/") }
+                    .toSet()
+            )
+            assertEquals("new-normal", File(targetPack, "normal/001.ogg").readText())
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun typingSoundPackInstallFailure_restoresPreviousPackExactly() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_rollback_restore").apply {
+            deleteRecursively()
+        }
+        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
+            parentFile?.mkdirs()
+            writeText("new-normal")
+        }
+        val targetPack = File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}"
+        )
+        File(targetPack, "normal/old.ogg").apply {
+            parentFile?.mkdirs()
+            writeText("old-normal")
+        }
+        File(targetPack, "space/old.wav").apply {
+            parentFile?.mkdirs()
+            writeText("old-space")
+        }
+
+        try {
+            assertThrows(IOException::class.java) {
+                FileBackupHelper.replaceTypingSoundPack(
+                    targetRoot = context.filesDir,
+                    rollbackRoot = context.cacheDir,
+                    extractedFilesRoot = extractedFiles,
+                    installStagedPack = { _, _ -> throw IOException("synthetic install failure") }
+                )
+            }
+
+            assertEquals(
+                mapOf(
+                    "normal/old.ogg" to "old-normal",
+                    "space/old.wav" to "old-space"
+                ),
+                targetPack.walkTopDown()
+                    .filter(File::isFile)
+                    .associate { file ->
+                        file.toRelativeString(targetPack).replace("\\", "/") to file.readText()
+                    }
+            )
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
     }
 
     @Test
