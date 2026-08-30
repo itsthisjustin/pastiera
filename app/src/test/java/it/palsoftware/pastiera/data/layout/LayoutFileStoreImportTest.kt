@@ -180,6 +180,64 @@ class LayoutFileStoreImportTest {
     }
 
     @Test
+    fun legacyNameCollidingWithMigratedCanonicalSafeId_remainsIndependentlyReplaceable() {
+        val root = LayoutFileStore.getLayoutsDirectory(context)
+        val composedName = "Café"
+        val decomposedName = "Cafe\u0301"
+        assertTrue(
+            LayoutFileStore.saveLayoutFromJson(context, composedName, validJson("a", "A"))
+                is LayoutImportResult.Success
+        )
+        val decomposedLegacy = File(root, "legacy-collision-source.json").apply {
+            writeText(validJson("b", "B"))
+        }
+
+        val migrated = LayoutFileStore.migrateLegacyLayoutFile(
+            context = context,
+            layoutName = decomposedName,
+            legacyFile = decomposedLegacy
+        )
+
+        assertTrue(migrated.exists())
+        assertFalse(decomposedLegacy.exists())
+        assertEquals(2, root.listFiles().orEmpty().count { it.name.matches(Regex("custom-[0-9a-f]{64}\\.json")) })
+        assertTrue(LayoutFileStore.getCustomLayoutNames(context).containsAll(listOf(composedName, decomposedName)))
+        assertEquals(
+            "a",
+            LayoutFileStore.loadLayoutFromFile(
+                LayoutFileStore.getLayoutFile(context, composedName)
+            )?.get(android.view.KeyEvent.KEYCODE_Q)?.lowercase
+        )
+        assertEquals(
+            "b",
+            LayoutFileStore.loadLayoutFromFile(
+                LayoutFileStore.getLayoutFile(context, decomposedName)
+            )?.get(android.view.KeyEvent.KEYCODE_Q)?.lowercase
+        )
+
+        val replacement = LayoutFileStore.saveLayoutFromJson(
+            context = context,
+            layoutName = decomposedName,
+            jsonString = validJson("c", "C"),
+            conflictPolicy = LayoutFileStore.LayoutConflictPolicy.REPLACE
+        )
+
+        assertTrue(replacement is LayoutImportResult.Success)
+        assertEquals(
+            "a",
+            LayoutFileStore.loadLayoutFromFile(
+                LayoutFileStore.getLayoutFile(context, composedName)
+            )?.get(android.view.KeyEvent.KEYCODE_Q)?.lowercase
+        )
+        assertEquals(
+            "c",
+            LayoutFileStore.loadLayoutFromFile(
+                LayoutFileStore.getLayoutFile(context, decomposedName)
+            )?.get(android.view.KeyEvent.KEYCODE_Q)?.lowercase
+        )
+    }
+
+    @Test
     fun legacyNameBasedFile_isMigratedWithoutBreakingLogicalName() {
         val root = LayoutFileStore.getLayoutsDirectory(context)
         val legacy = File(root, "Русский legacy.json")
