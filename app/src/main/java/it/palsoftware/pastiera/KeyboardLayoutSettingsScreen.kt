@@ -29,6 +29,7 @@ import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import it.palsoftware.pastiera.data.layout.BundledLayoutAssets
 import it.palsoftware.pastiera.data.layout.LayoutFileStore
 import it.palsoftware.pastiera.data.layout.LayoutFileStore.LayoutImportError
 import it.palsoftware.pastiera.data.layout.LayoutFileStore.LayoutImportResult
@@ -40,7 +41,6 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import android.content.res.AssetManager
 import org.json.JSONObject
-import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -595,8 +595,7 @@ private fun hasLayoutMultiTap(assets: AssetManager, context: Context, layoutName
             false
         } else {
             // Fallback to assets
-            val filePath = "common/layouts/$layoutName.json"
-            val inputStream: InputStream = assets.open(filePath)
+            val inputStream = BundledLayoutAssets.openLayout(assets, layoutName) ?: return false
             val jsonString = inputStream.bufferedReader().use { it.readText() }
             val jsonObject = JSONObject(jsonString)
             val mappingsObject = jsonObject.optJSONObject("mappings") ?: return false

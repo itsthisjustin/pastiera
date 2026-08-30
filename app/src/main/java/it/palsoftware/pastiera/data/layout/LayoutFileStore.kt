@@ -387,8 +387,7 @@ object LayoutFileStore {
 
     fun getLayoutMetadataFromAssets(assets: AssetManager, layoutName: String): LayoutMetadata? {
         return try {
-            val filePath = "common/layouts/$layoutName.json"
-            val inputStream: InputStream = assets.open(filePath)
+            val inputStream = BundledLayoutAssets.openLayout(assets, layoutName) ?: return null
             val jsonString = inputStream.bufferedReader().use { it.readText() }
             val jsonObject = JSONObject(jsonString)
             LayoutMetadata(

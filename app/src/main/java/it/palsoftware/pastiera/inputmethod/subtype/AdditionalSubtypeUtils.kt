@@ -227,7 +227,7 @@ object AdditionalSubtypeUtils {
         }
     }
 
-    private fun buildSubtypeDisplayName(
+    internal fun buildSubtypeDisplayName(
         context: Context,
         assets: AssetManager,
         locale: Locale,
