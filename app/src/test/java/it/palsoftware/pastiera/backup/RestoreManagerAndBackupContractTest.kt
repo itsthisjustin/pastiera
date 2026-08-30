@@ -418,6 +418,25 @@ class RestoreManagerAndBackupContractTest {
     }
 
     @Test
+    fun collectTriggeredPostRestoreActions_registersRestoredCustomInputStyles() {
+        val prefs = PreferencesRestoreSummary(
+            appliedKeys = listOf("pastiera_prefs:custom_input_styles"),
+            skippedKeys = emptyList()
+        )
+        val files = FileRestoreSummary(
+            restoredFiles = listOf("keyboard_layouts/custom-layout.json"),
+            skippedFiles = emptyList()
+        )
+
+        val actions = RestoreManager.collectTriggeredPostRestoreActions(prefs, files)
+
+        assertEquals(
+            setOf(RestoreManager.PostRestoreAction.REGISTER_CUSTOM_INPUT_STYLES),
+            actions
+        )
+    }
+
+    @Test
     fun shouldNotifyUserDictionaryRefresh_falseForUnrelatedRestore() {
         val prefs = PreferencesRestoreSummary(
             appliedKeys = listOf("pastiera_prefs:keyboard_layout"),

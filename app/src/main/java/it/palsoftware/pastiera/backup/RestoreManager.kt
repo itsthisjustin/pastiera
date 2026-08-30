@@ -7,6 +7,7 @@ import android.util.Log
 import it.palsoftware.pastiera.DeviceIdentitySnapshot
 import it.palsoftware.pastiera.AppBroadcastActions
 import it.palsoftware.pastiera.inputmethod.DeviceSpecific
+import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -14,10 +15,12 @@ import java.io.File
 object RestoreManager {
     private const val TAG = "RestoreManager"
     private const val USER_DICTIONARY_PREF_KEY = "pastiera_prefs:user_dictionary_entries"
+    private const val CUSTOM_INPUT_STYLES_PREF_KEY = "pastiera_prefs:custom_input_styles"
     private const val USER_DEFAULTS_FILE_NAME = "user_defaults.json"
 
     enum class PostRestoreAction {
-        REFRESH_USER_DICTIONARY
+        REFRESH_USER_DICTIONARY,
+        REGISTER_CUSTOM_INPUT_STYLES
     }
 
     enum class ImportMode {
@@ -41,6 +44,10 @@ object RestoreManager {
             action = PostRestoreAction.REFRESH_USER_DICTIONARY,
             matchingAppliedPrefKeys = setOf(USER_DICTIONARY_PREF_KEY),
             matchingRestoredFileNames = setOf(USER_DEFAULTS_FILE_NAME)
+        ),
+        PostRestoreTriggerRule(
+            action = PostRestoreAction.REGISTER_CUSTOM_INPUT_STYLES,
+            matchingAppliedPrefKeys = setOf(CUSTOM_INPUT_STYLES_PREF_KEY)
         )
     )
 
@@ -166,6 +173,10 @@ object RestoreManager {
                     }
                     context.sendBroadcast(intent)
                     Log.i(TAG, "Sent user dictionary refresh broadcast after restore")
+                }
+                PostRestoreAction.REGISTER_CUSTOM_INPUT_STYLES -> {
+                    AdditionalSubtypeUtils.registerAdditionalSubtypes(context.applicationContext)
+                    Log.i(TAG, "Registered custom input styles after restore")
                 }
             }
         }

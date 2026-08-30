@@ -45,6 +45,7 @@ class RestoreManagerIntegrationTest {
             .edit()
             .remove("user_dictionary_entries")
             .remove("keyboard_layout")
+            .remove("custom_input_styles")
             .remove("clicks_power_keyboard_snapshots_v1")
             .remove("clicks_power_soc_calibration_PK-42")
             .remove("physical_keyboard_profile_override")
@@ -64,6 +65,7 @@ class RestoreManagerIntegrationTest {
             .edit()
             .remove("user_dictionary_entries")
             .remove("keyboard_layout")
+            .remove("custom_input_styles")
             .remove("clicks_power_keyboard_snapshots_v1")
             .remove("clicks_power_soc_calibration_PK-42")
             .remove("physical_keyboard_profile_override")
@@ -181,6 +183,38 @@ class RestoreManagerIntegrationTest {
         }
 
         assertEquals(0, broadcastCount)
+    }
+
+    @Test
+    fun restore_customInputStyles_triggersRuntimeRegistration() = runBlocking {
+        val backupZip = createBackupZip(
+            includeMetadata = true,
+            prefsFiles = mapOf(
+                "pastiera_prefs.json" to prefsBackupJson(
+                    prefName = "pastiera_prefs",
+                    entries = mapOf(
+                        "custom_input_styles" to PreferenceValue(
+                            PreferenceValueType.STRING,
+                            "de:qwertz;ru:custom-russian"
+                        )
+                    )
+                )
+            ),
+            fileEntries = emptyMap()
+        )
+
+        val result = RestoreManager.restore(context, Uri.fromFile(backupZip))
+        val success = result as RestoreResult.Success
+
+        assertEquals(
+            setOf(RestoreManager.PostRestoreAction.REGISTER_CUSTOM_INPUT_STYLES),
+            success.postActionsTriggered
+        )
+        assertEquals(
+            "de:qwertz;ru:custom-russian",
+            context.getSharedPreferences("pastiera_prefs", Context.MODE_PRIVATE)
+                .getString("custom_input_styles", null)
+        )
     }
 
     @Test
