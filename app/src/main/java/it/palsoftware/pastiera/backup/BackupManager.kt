@@ -2,6 +2,8 @@ package it.palsoftware.pastiera.backup
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.net.Uri
 import android.util.Log
 import it.palsoftware.pastiera.BuildConfig
@@ -14,6 +16,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
@@ -587,11 +590,12 @@ object FileBackupHelper {
 
 internal object TypingSoundAudioValidator {
     private const val MAX_PROBE_BYTES = 128 * 1024
+    private const val MAX_SAMPLE_PROBE_BYTES = 1024 * 1024
 
     fun hasSupportedAudioContent(file: File): Boolean {
         if (!file.isFile || file.length() <= 0L) return false
         val probe = readProbe(file) ?: return false
-        return when (file.extension.lowercase()) {
+        val hasExpectedContainer = when (file.extension.lowercase()) {
             "ogg" -> probe.startsWithAscii("OggS") && (
                 probe.containsAscii("vorbis") ||
                     probe.containsAscii("OpusHead") ||
@@ -618,7 +622,28 @@ internal object TypingSoundAudioValidator {
                 )
             else -> false
         }
+        return hasExpectedContainer && hasDecodableAudioSample(file)
     }
+
+    private fun hasDecodableAudioSample(file: File): Boolean = runCatching {
+        val extractor = MediaExtractor()
+        try {
+            FileInputStream(file).use { input ->
+                extractor.setDataSource(input.fd)
+                val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
+                    val mime = extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+                    mime?.startsWith("audio/") == true
+                } ?: return@runCatching false
+                extractor.selectTrack(trackIndex)
+                val sampleBuffer = ByteBuffer.allocate(
+                    minOf(file.length(), MAX_SAMPLE_PROBE_BYTES.toLong()).toInt()
+                )
+                extractor.readSampleData(sampleBuffer, 0) > 0
+            }
+        } finally {
+            extractor.release()
+        }
+    }.getOrDefault(false)
 
     private fun readProbe(file: File): ByteArray? = runCatching {
         val targetSize = minOf(file.length(), MAX_PROBE_BYTES.toLong()).toInt()

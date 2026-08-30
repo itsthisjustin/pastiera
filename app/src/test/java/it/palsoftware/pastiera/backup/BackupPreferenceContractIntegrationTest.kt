@@ -1,6 +1,7 @@
 package it.palsoftware.pastiera.backup
 
 import android.content.Context
+import android.media.MediaFormat
 import android.net.Uri
 import it.palsoftware.pastiera.SettingsManager
 import kotlinx.coroutines.runBlocking
@@ -10,12 +11,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowMediaExtractor
+import org.robolectric.shadows.util.DataSource
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -26,6 +30,10 @@ import java.util.zip.ZipInputStream
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class BackupPreferenceContractIntegrationTest {
+
+    private companion object {
+        const val TEST_AUDIO_DATA_SOURCE = "test://bundled-real-ogg"
+    }
 
     private lateinit var context: Context
 
@@ -41,6 +49,19 @@ class BackupPreferenceContractIntegrationTest {
             context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit().clear().commit()
         }
         File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).deleteRecursively()
+        val audioBytes = bundledOggBytes()
+        DataSource.setFileDescriptorTransform { _, _ -> TEST_AUDIO_DATA_SOURCE }
+        ShadowMediaExtractor.addTrack(
+            DataSource.toDataSource(TEST_AUDIO_DATA_SOURCE),
+            MediaFormat.createAudioFormat("audio/vorbis", 44_100, 1),
+            audioBytes
+        )
+    }
+
+    @After
+    fun tearDown() {
+        ShadowMediaExtractor.reset()
+        DataSource.reset()
     }
 
     @Test
@@ -339,6 +360,47 @@ class BackupPreferenceContractIntegrationTest {
             assertFalse(File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).exists())
         } finally {
             extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun typingSoundRestore_rejectsTruncatedOggHeaderBeforeTargetMutation() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_truncated_restore").apply {
+            deleteRecursively()
+        }
+        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
+            parentFile?.mkdirs()
+            writeBytes("OggS\u0000\u0002truncated-vorbis".toByteArray())
+        }
+        ShadowMediaExtractor.reset()
+
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FileBackupHelper.restoreFiles(context, extractedFiles)
+            }
+            assertFalse(File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).exists())
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun typingSoundValidator_rejectsHeaderOnlyAudioContainers() {
+        ShadowMediaExtractor.reset()
+        val fixtures = mapOf(
+            "header-only.ogg" to "OggS\u0000\u0002truncated-vorbis".toByteArray(),
+            "header-only.wav" to "RIFF0000WAVEfmt ".toByteArray(),
+            "header-only.mp3" to byteArrayOf(0xff.toByte(), 0xfb.toByte(), 0x90.toByte(), 0x00),
+            "header-only.m4a" to "0000ftypisom".toByteArray()
+        )
+
+        fixtures.forEach { (name, bytes) ->
+            val file = File(context.cacheDir, name).apply { writeBytes(bytes) }
+            try {
+                assertFalse(name, TypingSoundAudioValidator.hasSupportedAudioContent(file))
+            } finally {
+                file.delete()
+            }
         }
     }
 
@@ -710,14 +772,18 @@ class BackupPreferenceContractIntegrationTest {
 
     private fun writeRealOgg(target: File): ByteArray {
         target.parentFile?.mkdirs()
+        val bytes = bundledOggBytes()
+        target.writeBytes(bytes)
+        return bytes
+    }
+
+    private fun bundledOggBytes(): ByteArray {
         val resourceId = context.resources.getIdentifier(
             "typing_click_normal_1",
             "raw",
             context.packageName
         )
         assertTrue("Bundled OGG fixture is missing", resourceId != 0)
-        val bytes = context.resources.openRawResource(resourceId).use { it.readBytes() }
-        target.writeBytes(bytes)
-        return bytes
+        return context.resources.openRawResource(resourceId).use { it.readBytes() }
     }
 }
