@@ -13,7 +13,7 @@ import java.util.zip.ZipOutputStream
 
 class ZipHelperTest {
 
-    private val smallLimits = ZipHelper.ExtractionLimits(
+    private val smallLimits = ZipHelper.ArchiveLimits(
         maxEntries = 3,
         maxEntryBytes = 8,
         maxTotalBytes = 12
@@ -123,6 +123,77 @@ class ZipHelperTest {
 
         assertEquals("12345", File(targetDir, "prefs/settings.json").readText())
         assertEquals("67890", File(targetDir, "files/layout.json").readText())
+    }
+
+    @Test
+    fun zip_rejectsEntryAboveUncompressedSizeLimit() = withTempDirectory { tempDir ->
+        File(tempDir, "source/large.bin").apply {
+            parentFile?.mkdirs()
+            writeText("123456789")
+        }
+
+        assertThrows(IllegalStateException::class.java) {
+            ZipHelper.zipWithLimits(
+                File(tempDir, "source"),
+                ByteArrayOutputStream(),
+                smallLimits
+            )
+        }
+    }
+
+    @Test
+    fun zip_rejectsArchiveAboveTotalUncompressedSizeLimit() = withTempDirectory { tempDir ->
+        File(tempDir, "source/first.bin").apply {
+            parentFile?.mkdirs()
+            writeText("1234567")
+        }
+        File(tempDir, "source/second.bin").writeText("7654321")
+
+        assertThrows(IllegalStateException::class.java) {
+            ZipHelper.zipWithLimits(
+                File(tempDir, "source"),
+                ByteArrayOutputStream(),
+                smallLimits
+            )
+        }
+    }
+
+    @Test
+    fun zip_rejectsArchiveAboveEntryCountLimit() = withTempDirectory { tempDir ->
+        val sourceDir = File(tempDir, "source").apply { mkdirs() }
+        listOf("one", "two", "three", "four").forEach { name ->
+            File(sourceDir, name).writeText("")
+        }
+
+        assertThrows(IllegalStateException::class.java) {
+            ZipHelper.zipWithLimits(sourceDir, ByteArrayOutputStream(), smallLimits)
+        }
+    }
+
+    @Test
+    fun zipAndUnzip_acceptNestedArchiveWithinSameLimits() = withTempDirectory { tempDir ->
+        val sourceDir = File(tempDir, "source")
+        File(sourceDir, "prefs/settings.json").apply {
+            parentFile?.mkdirs()
+            writeText("12345")
+        }
+        File(sourceDir, "files/layout.json").apply {
+            parentFile?.mkdirs()
+            writeText("67890")
+        }
+        val archive = ByteArrayOutputStream().also { output ->
+            ZipHelper.zipWithLimits(sourceDir, output, smallLimits)
+        }.toByteArray()
+        val restoredDir = File(tempDir, "restored")
+
+        ZipHelper.unzipWithLimits(
+            ByteArrayInputStream(archive),
+            restoredDir,
+            smallLimits
+        )
+
+        assertEquals("12345", File(restoredDir, "prefs/settings.json").readText())
+        assertEquals("67890", File(restoredDir, "files/layout.json").readText())
     }
 
     private fun zipOf(vararg entries: Pair<String, String>): ByteArray {

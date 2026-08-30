@@ -483,6 +483,27 @@ class BackupPreferenceContractIntegrationTest {
     }
 
     @Test
+    fun backupAboveRestoreEntryLimitReturnsFailure() = runBlocking {
+        val generatedLayoutDir = File(context.filesDir, "keyboard_layouts/zip-limit-test")
+        val backupFile = File.createTempFile("entry_limit_backup_", ".zip", context.cacheDir)
+        try {
+            repeat(ZipHelper.DEFAULT_ARCHIVE_LIMITS.maxEntries + 1) { index ->
+                File(generatedLayoutDir, "$index.json").apply {
+                    parentFile?.mkdirs()
+                    writeText("{}")
+                }
+            }
+
+            val result = BackupManager.createBackup(context, Uri.fromFile(backupFile))
+
+            assertTrue(result is BackupResult.Failure)
+        } finally {
+            generatedLayoutDir.deleteRecursively()
+            backupFile.delete()
+        }
+    }
+
+    @Test
     fun inactiveInvalidTypingSoundPack_isOmittedWithoutFailingBackup() = runBlocking {
         SettingsManager.setTypingSoundMode(context, SettingsManager.TYPING_SOUND_MODE_CLICK)
         SettingsManager.setTypingSoundOutputMode(context, SettingsManager.TYPING_SOUND_OUTPUT_SYSTEM)
