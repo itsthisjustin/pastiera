@@ -1138,7 +1138,7 @@ object SettingsManager {
     fun keyboardThemeFromJsonString(value: String): KeyboardThemeSettings? {
         return try {
             val json = JSONObject(value)
-            if (!hasCompleteKeyboardThemeSchema(json)) return null
+            if (!hasSupportedKeyboardThemeSchema(json)) return null
             keyboardThemeFromJson(json, defaultKeyboardTheme())
         } catch (error: Exception) {
             Log.e(TAG, "Fehler beim Importieren des Keyboard-Themes", error)
@@ -1146,8 +1146,8 @@ object SettingsManager {
         }
     }
 
-    private fun hasCompleteKeyboardThemeSchema(json: JSONObject): Boolean {
-        val integerKeys = listOf(
+    private fun hasSupportedKeyboardThemeSchema(json: JSONObject): Boolean {
+        val requiredIntegerKeys = listOf(
             "background",
             "divider",
             "normal_key",
@@ -1163,33 +1163,39 @@ object SettingsManager {
             "suggestion",
             "status_bar_button"
         )
-        val floatKeys = listOf(
+        val requiredFloatKeys = listOf(
             "key_corner_radius_ratio",
             "chrome_corner_radius_ratio",
             "key_height_scale",
-            "number_row_height_scale",
             "key_width_scale",
-            "row_gap_scale",
+            "row_gap_scale"
+        )
+        val optionalFloatKeys = listOf(
+            "number_row_height_scale",
             "suggestions_height_scale",
             "variations_height_scale"
         )
-        val booleanKeys = listOf(
+        val requiredBooleanKeys = listOf(
             "distribute_horizontal_spacing",
             "ortholinear",
-            "show_leds",
+            "show_leds"
+        )
+        val optionalBooleanKeys = listOf(
             "key_popup_attached",
             "key_popup_tail_enabled",
             "key_preview_after_long_press",
             "key_alternates_popup_enabled"
         )
 
-        if (!integerKeys.all { key -> json.opt(key).isJsonInt() }) return false
-        if (!floatKeys.all { key -> json.opt(key).isFiniteJsonNumber() }) return false
-        if (!booleanKeys.all { key -> json.opt(key) is Boolean }) return false
-        return json.opt("key_popup_style") in setOf(
-            KEYBOARD_THEME_POPUP_STYLE_FLOATING,
-            KEYBOARD_THEME_POPUP_STYLE_CLASSIC
-        )
+        if (!requiredIntegerKeys.all { key -> json.opt(key).isJsonInt() }) return false
+        if (!requiredFloatKeys.all { key -> json.opt(key).isFiniteJsonNumber() }) return false
+        if (!requiredBooleanKeys.all { key -> json.opt(key) is Boolean }) return false
+        if (!optionalFloatKeys.all { key -> !json.has(key) || json.opt(key).isFiniteJsonNumber() }) return false
+        if (!optionalBooleanKeys.all { key -> !json.has(key) || json.opt(key) is Boolean }) return false
+        return !json.has("key_popup_style") || json.opt("key_popup_style") in setOf(
+                KEYBOARD_THEME_POPUP_STYLE_FLOATING,
+                KEYBOARD_THEME_POPUP_STYLE_CLASSIC
+            )
     }
 
     private fun Any?.isJsonInt(): Boolean {

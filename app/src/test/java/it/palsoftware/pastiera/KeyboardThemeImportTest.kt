@@ -37,16 +37,77 @@ class KeyboardThemeImportTest {
     }
 
     @Test
-    fun incompleteTheme_isRejected() {
+    fun missingLegacyBaselineField_isRejected() {
         assertNull(SettingsManager.keyboardThemeFromJsonString("{}"))
 
         val incomplete = JSONObject(
             SettingsManager.keyboardThemeToJsonString(SettingsManager.defaultKeyboardTheme())
         ).apply {
-            remove("key_popup_tail_enabled")
+            remove("background")
         }
 
         assertNull(SettingsManager.keyboardThemeFromJsonString(incomplete.toString()))
+    }
+
+    @Test
+    fun initialExportReleaseTheme_importsWithDefaultsForNewerFields() {
+        val legacyExport = """
+            {
+              "background": -15790321,
+              "divider": -14671840,
+              "normal_key": -15658735,
+              "special_key": -14540254,
+              "text_and_icons": -13421773,
+              "led_inactive": -12303292,
+              "led_active": -11184811,
+              "led_locked": -10066330,
+              "accent": -8943463,
+              "cursor_swipe": -7829368,
+              "key_popup": -6710887,
+              "key_popup_selected": -5592406,
+              "suggestion": -4473925,
+              "status_bar_button": -3355444,
+              "key_corner_radius_ratio": 0.12,
+              "chrome_corner_radius_ratio": 0.23,
+              "key_height_scale": 1.11,
+              "key_width_scale": 0.97,
+              "row_gap_scale": 0.08,
+              "distribute_horizontal_spacing": false,
+              "ortholinear": true,
+              "show_leds": false
+            }
+        """.trimIndent()
+        val defaults = SettingsManager.defaultKeyboardTheme()
+
+        val imported = SettingsManager.keyboardThemeFromJsonString(legacyExport)
+
+        assertEquals(
+            defaults.copy(
+                background = -15790321,
+                divider = -14671840,
+                normalKey = -15658735,
+                specialKey = -14540254,
+                textAndIcons = -13421773,
+                ledInactive = -12303292,
+                ledActive = -11184811,
+                ledLocked = -10066330,
+                accent = -8943463,
+                cursorSwipe = -7829368,
+                keyPopup = -6710887,
+                keyPopupSelected = -5592406,
+                suggestion = -4473925,
+                statusBarButton = -3355444,
+                keyCornerRadiusRatio = 0.12f,
+                chromeCornerRadiusRatio = 0.23f,
+                keyHeightScale = 1.11f,
+                keyWidthScale = 0.97f,
+                rowGapScale = 0.08f,
+                distributeHorizontalSpacing = false,
+                ortholinear = true,
+                showLeds = false
+            ),
+            imported
+        )
     }
 
     @Test
@@ -54,10 +115,14 @@ class KeyboardThemeImportTest {
         val exported = SettingsManager.keyboardThemeToJsonString(SettingsManager.defaultKeyboardTheme())
         val stringColor = JSONObject(exported).apply { put("background", "-1") }
         val numericBoolean = JSONObject(exported).apply { put("show_leds", 1) }
+        val stringOptionalFloat = JSONObject(exported).apply { put("suggestions_height_scale", "1.2") }
+        val numericOptionalBoolean = JSONObject(exported).apply { put("key_popup_attached", 1) }
         val unsupportedStyle = JSONObject(exported).apply { put("key_popup_style", "future") }
 
         assertNull(SettingsManager.keyboardThemeFromJsonString(stringColor.toString()))
         assertNull(SettingsManager.keyboardThemeFromJsonString(numericBoolean.toString()))
+        assertNull(SettingsManager.keyboardThemeFromJsonString(stringOptionalFloat.toString()))
+        assertNull(SettingsManager.keyboardThemeFromJsonString(numericOptionalBoolean.toString()))
         assertNull(SettingsManager.keyboardThemeFromJsonString(unsupportedStyle.toString()))
     }
 
