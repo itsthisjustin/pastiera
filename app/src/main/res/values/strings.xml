@@ -1110,6 +1110,8 @@ Each key can be configured as Keycode, Action, Native Ctrl, or None. Use overrid
     <string name="layout_import_empty_mappings">The layout does not contain any key mappings.</string>
     <string name="layout_import_no_supported_mappings">The layout does not contain any supported key mappings.</string>
     <string name="layout_import_invalid_mapping">At least one supported key mapping is incomplete or invalid.</string>
+    <string name="layout_import_invalid_name">The layout name is empty or contains control characters.</string>
+    <string name="layout_import_name_conflict">A layout with this name already exists.</string>
     <string name="layout_import_write_failed">The validated layout could not be saved.</string>
     <string name="layout_invalid_file">Invalid layout file</string>
     <string name="layout_import_error">Error importing layout: %1$s</string>

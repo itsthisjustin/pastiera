@@ -540,6 +540,8 @@ private fun LayoutImportError.messageResource(): Int = when (this) {
     LayoutImportError.EMPTY_MAPPINGS -> R.string.layout_import_empty_mappings
     LayoutImportError.NO_SUPPORTED_MAPPINGS -> R.string.layout_import_no_supported_mappings
     LayoutImportError.INVALID_MAPPING -> R.string.layout_import_invalid_mapping
+    LayoutImportError.INVALID_NAME -> R.string.layout_import_invalid_name
+    LayoutImportError.NAME_CONFLICT -> R.string.layout_import_name_conflict
     LayoutImportError.WRITE_FAILED -> R.string.layout_import_write_failed
 }
 

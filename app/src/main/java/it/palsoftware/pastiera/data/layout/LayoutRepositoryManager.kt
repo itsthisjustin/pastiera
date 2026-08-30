@@ -100,7 +100,7 @@ object LayoutRepositoryManager {
             val body = response.body ?: return@withContext LayoutDownloadResult.NetworkError
             val contentLength = body.contentLength()
             val cacheDir = File(context.cacheDir, "layout_downloads").apply { mkdirs() }
-            val tempFile = File(cacheDir, "${item.filename}.tmp")
+            val tempFile = File.createTempFile("layout-download-", ".tmp", cacheDir)
 
             body.byteStream().use { input ->
                 tempFile.outputStream().use { output ->
@@ -123,25 +123,19 @@ object LayoutRepositoryManager {
             }
 
             val layoutName = layoutNameFromFilename(item.filename)
-            val validated = LayoutFileStore.loadLayoutFromStream(tempFile.inputStream())
-            if (validated == null) {
-                Log.e(TAG, "Downloaded layout ${item.filename} failed validation")
-                tempFile.delete()
-                return@withContext LayoutDownloadResult.InvalidFormat
-            }
-
-            val destFile = LayoutFileStore.getLayoutFile(context, layoutName)
-            if (destFile.exists()) {
-                destFile.delete()
-            }
-
-            if (!tempFile.renameTo(destFile)) {
-                tempFile.inputStream().use { input ->
-                    destFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+            val importResult = LayoutFileStore.saveLayoutFromJson(
+                context = context,
+                layoutName = layoutName,
+                jsonString = tempFile.readText(),
+                conflictPolicy = LayoutFileStore.LayoutConflictPolicy.REPLACE
+            )
+            tempFile.delete()
+            if (importResult is LayoutFileStore.LayoutImportResult.Failure) {
+                Log.e(TAG, "Downloaded layout ${item.filename} could not be installed: ${importResult.error}")
+                return@withContext when (importResult.error) {
+                    LayoutFileStore.LayoutImportError.WRITE_FAILED -> LayoutDownloadResult.CopyError
+                    else -> LayoutDownloadResult.InvalidFormat
                 }
-                tempFile.delete()
             }
 
             Log.i(TAG, "Layout downloaded: $layoutName")

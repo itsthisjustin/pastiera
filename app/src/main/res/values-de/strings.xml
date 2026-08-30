@@ -771,6 +771,8 @@ Jede Taste kann als Keycode, Aktion, Native Ctrl oder Keine konfiguriert werden.
     <string name="layout_import_empty_mappings">Das Layout enthält keine Tastenzuordnungen.</string>
     <string name="layout_import_no_supported_mappings">Das Layout enthält keine unterstützten Tastenzuordnungen.</string>
     <string name="layout_import_invalid_mapping">Mindestens eine unterstützte Tastenzuordnung ist unvollständig oder ungültig.</string>
+    <string name="layout_import_invalid_name">Der Layout-Name ist leer oder enthält Steuerzeichen.</string>
+    <string name="layout_import_name_conflict">Ein Layout mit diesem Namen ist bereits vorhanden.</string>
     <string name="layout_import_write_failed">Das geprüfte Layout konnte nicht gespeichert werden.</string>
     <string name="layout_invalid_file">Ungültige Layout-Datei</string>
     <string name="layout_import_error">Fehler beim Importieren des Layouts: %1$s</string>
