@@ -5,6 +5,7 @@ import android.net.Uri
 import it.palsoftware.pastiera.SettingsManager
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -91,8 +92,8 @@ class BackupPreferenceContractIntegrationTest {
             "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/normal/001.ogg"
         ).apply {
             parentFile?.mkdirs()
-            writeText("contract-normal-sound")
         }
+        val typingSoundBytes = writeRealOgg(typingSoundFile)
         SettingsManager.getPreferences(context).edit()
             .putString("user_dictionary_entries", "[\"ContractWord\"]")
             .putString("auto_correct_custom_de", "{\"ctr\":\"ContractReplacement\"}")
@@ -128,9 +129,9 @@ class BackupPreferenceContractIntegrationTest {
         assertFalse(zipEntries.containsKey("prefs/app_list_cache_prefs.json"))
         assertFalse(zipEntries.containsKey("prefs/perf_img_scale.json"))
         assertFalse(zipEntries.containsKey("prefs/recent_emojis_prefs.json"))
-        assertEquals(
-            "contract-normal-sound",
-            zipEntries.getValue("files/typing_sounds/custom_pack/normal/001.ogg")
+        assertArrayEquals(
+            typingSoundBytes,
+            readZipEntryBytes(backupZip, "files/typing_sounds/custom_pack/normal/001.ogg")
         )
         val exportedEntries = JSONObject(zipEntries.getValue("prefs/pastiera_prefs.json"))
             .getJSONObject("entries")
@@ -195,9 +196,9 @@ class BackupPreferenceContractIntegrationTest {
             SettingsManager.getTypingSoundOutputMode(context)
         )
         assertEquals("Contract sounds.zip", SettingsManager.getTypingSoundCustomDisplayName(context))
-        assertEquals(
-            "contract-normal-sound",
-            SettingsManager.getTypingSoundCustomGroupFiles(context).getValue("normal").single().readText()
+        assertArrayEquals(
+            typingSoundBytes,
+            SettingsManager.getTypingSoundCustomGroupFiles(context).getValue("normal").single().readBytes()
         )
         assertFalse(SettingsManager.getPreferences(context).contains(SettingsManager.KEY_TYPING_SOUND_UPDATED_AT))
         assertTrue(typingSoundFile.parentFile?.isDirectory == true)
@@ -292,6 +293,56 @@ class BackupPreferenceContractIntegrationTest {
     }
 
     @Test
+    fun typingSoundRestore_rejectsCorruptSupportedExtensionBeforeTargetMutation() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_corrupt_restore").apply {
+            deleteRecursively()
+        }
+        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
+            parentFile?.mkdirs()
+            writeText("not actually an ogg stream")
+        }
+        val targetPack = File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}"
+        )
+        val originalTarget = File(targetPack, "normal/original.ogg")
+        val originalBytes = writeRealOgg(originalTarget)
+
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FileBackupHelper.restoreFiles(context, extractedFiles)
+            }
+            assertArrayEquals(originalBytes, originalTarget.readBytes())
+            assertEquals(setOf("normal/original.ogg"), targetPack.walkTopDown()
+                .filter(File::isFile)
+                .map { it.toRelativeString(targetPack).replace("\\", "/") }
+                .toSet())
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun typingSoundRestore_rejectsEmptySupportedExtensionBeforeTargetMutation() {
+        val extractedFiles = File(context.cacheDir, "typing_sound_empty_restore").apply {
+            deleteRecursively()
+        }
+        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf())
+        }
+
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FileBackupHelper.restoreFiles(context, extractedFiles)
+            }
+            assertFalse(File(context.filesDir, SettingsManager.TYPING_SOUND_CUSTOM_DIR).exists())
+        } finally {
+            extractedFiles.deleteRecursively()
+        }
+    }
+
+    @Test
     fun typingSoundRestore_rejectsFileAboveImportLimit() {
         val extractedFiles = File(context.cacheDir, "typing_sound_oversized_restore").apply {
             deleteRecursively()
@@ -341,6 +392,32 @@ class BackupPreferenceContractIntegrationTest {
         val invalidResult = BackupManager.createBackup(context, Uri.fromFile(invalidPackBackup))
 
         assertTrue(invalidResult is BackupResult.Failure)
+    }
+
+    @Test
+    fun activeCustomTypingSound_withCorruptAllowedExtensionFailsBackup() = runBlocking {
+        SettingsManager.setTypingSoundMode(context, SettingsManager.TYPING_SOUND_MODE_CUSTOM)
+        SettingsManager.getPreferences(context).edit()
+            .putString(
+                SettingsManager.KEY_TYPING_SOUND_CUSTOM_FILE_NAME,
+                SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR
+            )
+            .putString(SettingsManager.KEY_TYPING_SOUND_CUSTOM_DISPLAY_NAME, "Corrupt.zip")
+            .commit()
+        File(
+            context.filesDir,
+            "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}/normal/001.ogg"
+        ).apply {
+            parentFile?.mkdirs()
+            writeText("not actually an ogg stream")
+        }
+
+        val result = BackupManager.createBackup(
+            context,
+            Uri.fromFile(File.createTempFile("corrupt_typing_sound_", ".zip", context.cacheDir))
+        )
+
+        assertTrue(result is BackupResult.Failure)
     }
 
     @Test
@@ -451,10 +528,9 @@ class BackupPreferenceContractIntegrationTest {
         val extractedFiles = File(context.cacheDir, "typing_sound_replace_restore").apply {
             deleteRecursively()
         }
-        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
-            parentFile?.mkdirs()
-            writeText("new-normal")
-        }
+        val newNormalBytes = writeRealOgg(
+            File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg")
+        )
         val targetPack = File(
             context.filesDir,
             "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}"
@@ -482,7 +558,7 @@ class BackupPreferenceContractIntegrationTest {
                     .map { it.toRelativeString(targetPack).replace("\\", "/") }
                     .toSet()
             )
-            assertEquals("new-normal", File(targetPack, "normal/001.ogg").readText())
+            assertArrayEquals(newNormalBytes, File(targetPack, "normal/001.ogg").readBytes())
         } finally {
             extractedFiles.deleteRecursively()
         }
@@ -493,10 +569,7 @@ class BackupPreferenceContractIntegrationTest {
         val extractedFiles = File(context.cacheDir, "typing_sound_rollback_restore").apply {
             deleteRecursively()
         }
-        File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg").apply {
-            parentFile?.mkdirs()
-            writeText("new-normal")
-        }
+        writeRealOgg(File(extractedFiles, "typing_sounds/custom_pack/normal/001.ogg"))
         val targetPack = File(
             context.filesDir,
             "${SettingsManager.TYPING_SOUND_CUSTOM_DIR}/${SettingsManager.TYPING_SOUND_CUSTOM_PACK_DIR}"
@@ -619,5 +692,32 @@ class BackupPreferenceContractIntegrationTest {
             }
         }
         return entries
+    }
+
+    private fun readZipEntryBytes(zipFile: File, entryName: String): ByteArray {
+        ZipInputStream(FileInputStream(zipFile)).use { zipInput ->
+            var entry = zipInput.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory && entry.name == entryName) {
+                    return zipInput.readBytes()
+                }
+                zipInput.closeEntry()
+                entry = zipInput.nextEntry
+            }
+        }
+        throw AssertionError("Missing ZIP entry: $entryName")
+    }
+
+    private fun writeRealOgg(target: File): ByteArray {
+        target.parentFile?.mkdirs()
+        val resourceId = context.resources.getIdentifier(
+            "typing_click_normal_1",
+            "raw",
+            context.packageName
+        )
+        assertTrue("Bundled OGG fixture is missing", resourceId != 0)
+        val bytes = context.resources.openRawResource(resourceId).use { it.readBytes() }
+        target.writeBytes(bytes)
+        return bytes
     }
 }

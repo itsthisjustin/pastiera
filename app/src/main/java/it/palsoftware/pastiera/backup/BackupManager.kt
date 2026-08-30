@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -475,6 +476,9 @@ object FileBackupHelper {
             if (file.length() > SettingsManager.TYPING_SOUND_MAX_FILE_BYTES) {
                 throw IllegalArgumentException("Typing sound pack file exceeds size limit")
             }
+            if (!TypingSoundAudioValidator.hasSupportedAudioContent(file)) {
+                throw IllegalArgumentException("Typing sound pack contains invalid audio content")
+            }
             totalBytes += file.length()
             if (totalBytes > SettingsManager.TYPING_SOUND_MAX_PACK_BYTES) {
                 throw IllegalArgumentException("Typing sound pack exceeds total size limit")
@@ -578,5 +582,90 @@ object FileBackupHelper {
             Log.e(TAG, "Error loading current variations.json", e)
             null
         }
+    }
+}
+
+internal object TypingSoundAudioValidator {
+    private const val MAX_PROBE_BYTES = 128 * 1024
+
+    fun hasSupportedAudioContent(file: File): Boolean {
+        if (!file.isFile || file.length() <= 0L) return false
+        val probe = readProbe(file) ?: return false
+        return when (file.extension.lowercase()) {
+            "ogg" -> probe.startsWithAscii("OggS") && (
+                probe.containsAscii("vorbis") ||
+                    probe.containsAscii("OpusHead") ||
+                    probe.containsBytes(
+                        byteArrayOf(
+                            0x7f,
+                            'F'.code.toByte(),
+                            'L'.code.toByte(),
+                            'A'.code.toByte(),
+                            'C'.code.toByte()
+                        )
+                    )
+                )
+            "wav" ->
+                probe.startsWithAscii("RIFF") &&
+                    probe.hasAsciiAt("WAVE", 8) &&
+                    probe.containsAscii("fmt ")
+            "mp3" -> probe.containsMpegAudioFrame()
+            "m4a" -> probe.hasAsciiAt("ftyp", 4) && (
+                probe.containsAscii("M4A ") ||
+                    probe.containsAscii("isom") ||
+                    probe.containsAscii("mp42") ||
+                    probe.containsAscii("mp41")
+                )
+            else -> false
+        }
+    }
+
+    private fun readProbe(file: File): ByteArray? = runCatching {
+        val targetSize = minOf(file.length(), MAX_PROBE_BYTES.toLong()).toInt()
+        val probe = ByteArray(targetSize)
+        FileInputStream(file).use { input ->
+            var offset = 0
+            while (offset < probe.size) {
+                val read = input.read(probe, offset, probe.size - offset)
+                if (read < 0) break
+                if (read == 0) continue
+                offset += read
+            }
+            if (offset == probe.size) probe else probe.copyOf(offset)
+        }
+    }.getOrNull()
+
+    private fun ByteArray.startsWithAscii(value: String): Boolean = hasAsciiAt(value, 0)
+
+    private fun ByteArray.hasAsciiAt(value: String, offset: Int): Boolean {
+        val expected = value.toByteArray(Charsets.US_ASCII)
+        if (offset < 0 || offset + expected.size > size) return false
+        return expected.indices.all { index -> this[offset + index] == expected[index] }
+    }
+
+    private fun ByteArray.containsAscii(value: String): Boolean =
+        containsBytes(value.toByteArray(Charsets.US_ASCII))
+
+    private fun ByteArray.containsBytes(value: ByteArray): Boolean {
+        if (value.isEmpty() || value.size > size) return false
+        return (0..size - value.size).any { offset ->
+            value.indices.all { index -> this[offset + index] == value[index] }
+        }
+    }
+
+    private fun ByteArray.containsMpegAudioFrame(): Boolean {
+        if (size < 4) return false
+        for (index in 0 until size - 3) {
+            val first = this[index].toInt() and 0xff
+            val second = this[index + 1].toInt() and 0xff
+            val third = this[index + 2].toInt() and 0xff
+            val sync = first == 0xff && second and 0xe0 == 0xe0
+            val validVersion = second and 0x18 != 0x08
+            val validLayer = second and 0x06 != 0
+            val validBitrate = third and 0xf0 != 0 && third and 0xf0 != 0xf0
+            val validSampleRate = third and 0x0c != 0x0c
+            if (sync && validVersion && validLayer && validBitrate && validSampleRate) return true
+        }
+        return false
     }
 }
