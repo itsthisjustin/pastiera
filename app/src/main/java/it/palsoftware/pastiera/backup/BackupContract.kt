@@ -207,7 +207,7 @@ data class PreferenceFileSchema(
     }
 }
 
-object PreferenceSchemas {
+internal object BackupPreferenceContract {
     private val pastieraPrefsSchema = PreferenceFileSchema(
         prefName = "pastiera_prefs",
         fixedKeys = mapOf(
@@ -230,6 +230,14 @@ object PreferenceSchemas {
             "swipe_to_delete_provider" to PreferenceValueType.STRING,
             "tap_haptic_use_system" to PreferenceValueType.BOOLEAN,
             "tap_haptic_duration_ms" to PreferenceValueType.LONG,
+            "app_language_tag" to PreferenceValueType.STRING,
+            "app_enter_behavior_enabled" to PreferenceValueType.BOOLEAN,
+            "app_enter_behavior_preset" to PreferenceValueType.STRING,
+            "app_enter_behavior_overrides" to PreferenceValueType.STRING,
+            "keyboard_theme_hardware" to PreferenceValueType.STRING,
+            "keyboard_theme_software" to PreferenceValueType.STRING,
+            "keyboard_theme_saved_themes" to PreferenceValueType.STRING,
+            "keyboard_theme_drafts" to PreferenceValueType.STRING,
             "keyboard_theme_assignment_mode_hardware" to PreferenceValueType.STRING,
             "keyboard_theme_assignment_mode_software" to PreferenceValueType.STRING,
             "keyboard_theme_light_hardware" to PreferenceValueType.STRING,
@@ -285,37 +293,37 @@ object PreferenceSchemas {
             "auto_capitalize_after_period" to PreferenceValueType.BOOLEAN,
             "long_press_modifier" to PreferenceValueType.STRING,
             "keyboard_layout" to PreferenceValueType.STRING,
+            "keyboard_layout_auto_by_locale" to PreferenceValueType.BOOLEAN,
             "keyboard_layout_list" to PreferenceValueType.STRING,
             "input_style_suggestion_locales" to PreferenceValueType.STRING,
             "hidden_system_input_styles" to PreferenceValueType.STRING,
-            "restore_sym_page" to PreferenceValueType.INT,
-            "pending_restore_sym_page" to PreferenceValueType.INT,
             "sym_pages_config" to PreferenceValueType.STRING,
             "alt_modifier_binding" to PreferenceValueType.STRING,
-            // Accepted so backups from releases before the Device-SYM terminology migration restore cleanly.
-            "alt_character_layer_binding" to PreferenceValueType.STRING,
             "sym_auto_close" to PreferenceValueType.BOOLEAN,
             "emoji_picker_expanded_height" to PreferenceValueType.BOOLEAN,
-            "dismissed_releases" to PreferenceValueType.STRING,
-            "tutorial_completed" to PreferenceValueType.BOOLEAN,
             "swipe_incremental_threshold" to PreferenceValueType.FLOAT,
             "static_variation_bar_mode" to PreferenceValueType.BOOLEAN,
             "static_variation_bar_preset" to PreferenceValueType.STRING,
             "static_variation_bar_base_layer_enabled" to PreferenceValueType.BOOLEAN,
             "static_variation_bar_modifier_hold_restoration" to PreferenceValueType.BOOLEAN,
             "global_variation_layout_override" to PreferenceValueType.STRING,
-            "variations_updated" to PreferenceValueType.LONG,
             "status_bar_slot_left" to PreferenceValueType.STRING,
             "status_bar_slot_right_1" to PreferenceValueType.STRING,
             "status_bar_slot_right_2" to PreferenceValueType.STRING,
             "status_bar_slots_left" to PreferenceValueType.STRING,
             "status_bar_slots_right" to PreferenceValueType.STRING,
+            "pastierina_status_bar_slots_left" to PreferenceValueType.STRING,
+            "pastierina_status_bar_slots_right" to PreferenceValueType.STRING,
             "status_bar_variations_visible" to PreferenceValueType.BOOLEAN,
+            "dynamic_variation_bar_slot_count" to PreferenceValueType.INT,
+            "dynamic_variation_bar_resize_to_content" to PreferenceValueType.BOOLEAN,
             "launcher_shortcuts" to PreferenceValueType.STRING,
             "launcher_shortcuts_enabled" to PreferenceValueType.BOOLEAN,
             "quick_launcher_auto_start_single" to PreferenceValueType.BOOLEAN,
             "quick_launcher_limit_results" to PreferenceValueType.BOOLEAN,
             "quick_launcher_text_field_shortcuts" to PreferenceValueType.BOOLEAN,
+            "quick_launcher_alt_space_in_text_fields" to PreferenceValueType.BOOLEAN,
+            "quick_launcher_alt_shortcuts_outside_text_fields" to PreferenceValueType.BOOLEAN,
             "quick_launcher_respect_keyboard_layout" to PreferenceValueType.BOOLEAN,
             "quick_launcher_typo_tolerant_ranking" to PreferenceValueType.BOOLEAN,
             "quick_launcher_width_percent" to PreferenceValueType.INT,
@@ -331,7 +339,7 @@ object PreferenceSchemas {
             "quick_launcher_static_top_highlight" to PreferenceValueType.BOOLEAN,
             "quick_launcher_static_top_highlight_color" to PreferenceValueType.INT,
             "nav_mode_enabled" to PreferenceValueType.BOOLEAN,
-            "nav_mode_mappings_updated" to PreferenceValueType.LONG,
+            "nav_mode_ctrl_hold_enabled" to PreferenceValueType.BOOLEAN,
             "power_shortcuts_enabled" to PreferenceValueType.BOOLEAN,
             "experimental_suggestions_enabled" to PreferenceValueType.BOOLEAN,
             "suggestion_debug_logging" to PreferenceValueType.BOOLEAN,
@@ -342,13 +350,13 @@ object PreferenceSchemas {
             "clipboard_retention_time" to PreferenceValueType.LONG,
             "trackpad_gestures_enabled" to PreferenceValueType.BOOLEAN,
             "trackpad_gesture_add_word_enabled" to PreferenceValueType.BOOLEAN,
+            "trackpad_gesture_add_word_full_width_enabled" to PreferenceValueType.BOOLEAN,
             "trackpad_swipe_threshold" to PreferenceValueType.FLOAT,
             "trackpad_suggestion_swipe_threshold" to PreferenceValueType.FLOAT,
             "trackpad_delete_swipe_threshold" to PreferenceValueType.FLOAT,
             "trackpad_provider" to PreferenceValueType.STRING,
             "trackpad_shizuku_device" to PreferenceValueType.STRING,
             "pastierina_mode_override" to PreferenceValueType.STRING,
-            "pastierina_mode_active" to PreferenceValueType.BOOLEAN,
             "software_keyboard_mode" to PreferenceValueType.STRING,
             "physical_keyboard_profile_override" to PreferenceValueType.STRING,
             "software_keyboard_layout_style" to PreferenceValueType.STRING,
@@ -411,15 +419,67 @@ object PreferenceSchemas {
         pastieraPrefsSchema.prefName to pastieraPrefsSchema
     )
 
-    fun expectedType(prefName: String, key: String): PreferenceValueType? {
+    private val excludedPreferenceFiles = setOf(
+        "app_list_cache_prefs",
+        "perf_img_scale",
+        "recent_emojis_prefs"
+    )
+
+    internal val deliberatelyExcludedPastieraKeys = mapOf(
+        "alt_shift_default_initialized" to "default-initialization marker",
+        "keyboard_layout_auto_mapping_updated" to "mapping refresh marker",
+        "legacy_german_qwertz_default_migrated" to "migration marker",
+        "last_seen_whats_new_version" to "release UI state",
+        "nav_mode_default_mappings_version" to "default-migration marker",
+        "nav_mode_mappings_updated" to "runtime refresh marker",
+        "quick_launcher_default_assigned" to "default-initialization marker",
+        "current_sym_page" to "transient UI state",
+        "restore_sym_page" to "transient UI state",
+        "pending_restore_sym_page" to "transient UI state",
+        "keyboard_theme_preview_viewport_scale" to "preview-only UI state",
+        "dismissed_releases" to "release UI state",
+        "tutorial_completed" to "onboarding UI state",
+        "variations_updated" to "runtime refresh marker",
+        "pastierina_mode_active" to "runtime-derived state",
+        "software_keyboard_mode_runtime_override" to "runtime-derived state",
+        "clicks_bluetooth_permission_explained" to "permission UI state",
+        "clicks_manual_charging_until" to "transient runtime state"
+    )
+
+    fun expectedExportType(prefName: String, key: String): PreferenceValueType? {
         return schemasByName[prefName]?.expectedType(key)
+    }
+
+    fun isExportable(prefName: String, key: String): Boolean =
+        !excludedPreferenceFiles.contains(prefName) && expectedExportType(prefName, key) != null
+
+    fun shouldExportPreferenceFile(prefName: String): Boolean =
+        !excludedPreferenceFiles.contains(prefName) && schemasByName.containsKey(prefName)
+}
+
+object PreferenceSchemas {
+    private val restoreOnlyPastieraKeys = mapOf(
+        // Accepted so backups from releases before the Device-SYM terminology migration restore cleanly.
+        "alt_character_layer_binding" to PreferenceValueType.STRING,
+        "restore_sym_page" to PreferenceValueType.INT,
+        "pending_restore_sym_page" to PreferenceValueType.INT,
+        "dismissed_releases" to PreferenceValueType.STRING,
+        "tutorial_completed" to PreferenceValueType.BOOLEAN,
+        "variations_updated" to PreferenceValueType.LONG,
+        "nav_mode_mappings_updated" to PreferenceValueType.LONG,
+        "pastierina_mode_active" to PreferenceValueType.BOOLEAN,
+        "software_keyboard_mode_runtime_override" to PreferenceValueType.STRING
+    )
+
+    fun expectedType(prefName: String, key: String): PreferenceValueType? {
+        return BackupPreferenceContract.expectedExportType(prefName, key)
+            ?: if (prefName == "pastiera_prefs") restoreOnlyPastieraKeys[key] else null
     }
 
     fun isRecognized(prefName: String, key: String, currentKeys: Set<String>): Boolean {
         if (currentKeys.contains(key)) {
             return true
         }
-        val schema = schemasByName[prefName] ?: return false
-        return schema.expectedType(key) != null
+        return expectedType(prefName, key) != null
     }
 }

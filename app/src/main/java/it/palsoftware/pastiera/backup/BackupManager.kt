@@ -68,9 +68,6 @@ data class FileRestoreSummary(
 
 object PreferencesBackupHelper {
     private const val TAG = "PreferencesBackup"
-    private val excludedPrefNames = setOf(
-        "recent_emojis_prefs"
-    )
 
     fun dumpSharedPreferences(context: Context, destinationDir: File): List<String> {
         val sharedPrefsDir = File(context.dataDir, "shared_prefs")
@@ -81,7 +78,7 @@ object PreferencesBackupHelper {
         val components = mutableListOf<String>()
         sharedPrefsDir.listFiles { file -> file.extension == "xml" }?.forEach { file ->
             val prefName = file.name.removeSuffix(".xml")
-            if (excludedPrefNames.contains(prefName)) {
+            if (!BackupPreferenceContract.shouldExportPreferenceFile(prefName)) {
                 return@forEach
             }
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
@@ -98,10 +95,16 @@ object PreferencesBackupHelper {
         json.put("name", prefName)
         val entries = JSONObject()
         prefs.all.forEach { (key, value) ->
-            if (BackupPreferencePolicy.shouldExcludeFromBackup(prefName, key)) {
+            val expectedType = BackupPreferenceContract.expectedExportType(prefName, key)
+            if (expectedType == null) {
+                Log.i(TAG, "Not exporting unclassified or non-user preference $prefName:$key")
                 return@forEach
             }
-            val prefValue = PreferenceValue.fromAny(value) ?: return@forEach
+            val prefValue = PreferenceValue.fromAny(value)?.coerceTo(expectedType)
+            if (prefValue == null) {
+                Log.w(TAG, "Not exporting preference with incompatible type $prefName:$key")
+                return@forEach
+            }
             entries.put(key, prefValue.toJson())
         }
         json.put("entries", entries)

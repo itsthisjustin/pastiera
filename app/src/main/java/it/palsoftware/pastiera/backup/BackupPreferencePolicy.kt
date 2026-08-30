@@ -13,7 +13,4 @@ internal object BackupPreferencePolicy {
         "$PASTIERA_PREFS:titan2_layout_enabled",
         "$PASTIERA_PREFS:titan2_elite_rounded_corner_insets"
     )
-
-    fun shouldExcludeFromBackup(prefName: String, key: String): Boolean =
-        runtimeDerivedKeys.contains("$prefName:$key")
 }
