@@ -40,6 +40,8 @@ class KeyboardVisibilityController(
     private var surfaceTransitionGeneration = 0
     private var pendingSurfaceTransition: PendingSurfaceTransition? = null
     private var candidatesSurfaceRequested = false
+    private var candidatesDismissalGeneration = 0
+    private var candidatesSurfaceExplicitlyDismissed = false
     private val candidatesSurfaceRecoveryWorkaround = CandidatesSurfaceRecoveryWorkaround(
         isRequired = requiresCandidatesSurfaceRecovery,
         canRecover = {
@@ -100,6 +102,8 @@ class KeyboardVisibilityController(
         if (isNavModeLatched()) {
             return
         }
+
+        clearExplicitCandidatesDismissal()
 
         when (SettingsManager.resolveEffectiveSoftwareKeyboardMode(context)) {
             SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL -> ensureFullInputViewVisible()
@@ -163,11 +167,92 @@ class KeyboardVisibilityController(
     }
 
     fun onCandidatesViewStarted() {
+        clearExplicitCandidatesDismissal()
         candidatesSurfaceRequested = true
+        // This callback describes the framework's actual surface transition, not merely a
+        // request. A preceding full-input transition may have collapsed the candidates root;
+        // reactivate it before the service refreshes its contents.
+        setCandidatesSurfaceActive(true)
     }
 
-    fun onCandidatesViewFinished() {
+    fun onCandidatesViewFinished(finishingInput: Boolean) {
+        val externallyFinishedRequestedSurface =
+            candidatesSurfaceRequested && pendingSurfaceTransition == null
         candidatesSurfaceRequested = false
+        // A delayed app-compatibility recovery belongs to the surface that just finished. Let a
+        // subsequent explicit show or hardware-input request schedule a fresh generation instead
+        // of allowing the stale action to rebound after Back or focus loss.
+        candidatesSurfaceRecoveryWorkaround.cancel()
+        // Keep the local child state aligned with the framework callback. The next
+        // onCandidatesViewStarted callback reactivates and refreshes the same root.
+        setCandidatesSurfaceActive(false)
+        if (finishingInput || !externallyFinishedRequestedSurface) return
+
+        // setCandidatesViewShown(false) only removes the candidates child. When the system/user
+        // dismisses an otherwise still-requested candidates-only surface, Android can keep the
+        // server-side IME request (and an OEM caption/touch region) alive. Complete that external
+        // dismissal through the public IME hide request. Delay by one UI turn so a transient
+        // candidates restart can cancel it before a newly started surface is hidden.
+        candidatesSurfaceExplicitlyDismissed = true
+        val generation = ++candidatesDismissalGeneration
+        postToUi {
+            if (
+                generation != candidatesDismissalGeneration ||
+                !candidatesSurfaceExplicitlyDismissed ||
+                candidatesSurfaceRequested ||
+                pendingSurfaceTransition != null ||
+                renderedSurface() == RenderedSurface.FULL_INPUT_VIEW
+            ) {
+                return@postToUi
+            }
+            try {
+                requestHideInputView()
+            } catch (_: Exception) {
+                // The framework may have completed the hide already.
+            }
+        }
+    }
+
+    fun onInputStarted(restarting: Boolean) {
+        if (!restarting) {
+            clearExplicitCandidatesDismissal()
+        }
+    }
+
+    fun onExplicitShowRequested() {
+        // The framework reports an editor's showSoftInput request even when a retap on the same
+        // still-focused field does not restart input or call onViewClicked. This explicit request
+        // is one same-session action that clears a deliberate dismissal. A non-Back hardware key
+        // is the other and follows onHardwareInputRequested().
+        if (!isInputViewActive() || currentInputConnection() == null) return
+        clearExplicitCandidatesDismissal()
+        ensureImeSurfaceVisible()
+    }
+
+    fun onHardwareInputRequested() {
+        if (!isInputViewActive() || currentInputConnection() == null || isNavModeLatched()) return
+
+        // Telegram deliberately reports the candidate surface as needing recovery even while its
+        // enclosing IME window is still requested and visible. Preserve its delayed compatibility
+        // request, but reserve an immediate whole-window show for a window that actually finished.
+        val enclosingImeWindowNeedsShow =
+            candidatesSurfaceExplicitlyDismissed || !candidatesSurfaceRequested
+        ensureImeSurfaceVisible()
+        if (
+            enclosingImeWindowNeedsShow &&
+            SettingsManager.resolveEffectiveSoftwareKeyboardMode(context) !=
+            SettingsManager.SoftwareKeyboardMode.FORCE_VIRTUAL
+        ) {
+            try {
+                // setCandidatesViewShown(true) attaches the candidates child, but after a full
+                // framework hide Android may keep mInputShown=false. A hardware key is explicit
+                // user input, so pair the child request with the same framework show request a
+                // retap would issue.
+                requestShowInputView()
+            } catch (_: Exception) {
+                // The candidates request above remains the safe fallback if Android rejects it.
+            }
+        }
     }
 
     fun togglePastierinaMode() {
@@ -199,6 +284,7 @@ class KeyboardVisibilityController(
         requireActiveTextField: Boolean = false
     ) {
         val generation = ++surfaceTransitionGeneration
+        clearExplicitCandidatesDismissal()
         pendingSurfaceTransition = null
         candidatesSurfaceRecoveryWorkaround.cancel()
         refreshStatusBar()
@@ -336,6 +422,24 @@ class KeyboardVisibilityController(
         } else {
             candidatesSurfaceRequested && !requiresCandidatesSurfaceRecovery()
         }
+
+    /**
+     * A non-Back hardware key is an explicit request to resume typing. Keep the dismissal latch
+     * only long enough to prevent an autonomous rebound after the framework hide; the first
+     * subsequent key must restore the surface just as it did before candidates-only lifecycle
+     * handling was introduced. The caller then uses [onHardwareInputRequested] to reconcile both
+     * the candidates child and Android's enclosing IME-window request.
+     */
+    fun shouldRecoverSurfaceOnHardwareKey(): Boolean =
+        !isExpectedSurfaceRequestedOrShown()
+
+    internal fun isCandidatesSurfaceExplicitlyDismissedForTests(): Boolean =
+        candidatesSurfaceExplicitlyDismissed
+
+    private fun clearExplicitCandidatesDismissal() {
+        candidatesDismissalGeneration += 1
+        candidatesSurfaceExplicitlyDismissed = false
+    }
 
     private fun abandonSurfaceTransition() {
         val actualSurface = renderedSurface()

@@ -2737,7 +2737,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
 
     override fun onFinishCandidatesView(finishingInput: Boolean) {
         super.onFinishCandidatesView(finishingInput)
-        keyboardVisibilityController.onCandidatesViewFinished()
+        keyboardVisibilityController.onCandidatesViewFinished(finishingInput)
     }
 
     /**
@@ -2752,6 +2752,14 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
             keyboardVisibilityController.onEvaluateInputViewShown(systemShouldShowInputView)
         requestedInputViewShown = resolvedShowInputView
         return resolvedShowInputView
+    }
+
+    override fun onShowInputRequested(flags: Int, configChange: Boolean): Boolean {
+        val accepted = super.onShowInputRequested(flags, configChange)
+        if (::keyboardVisibilityController.isInitialized) {
+            keyboardVisibilityController.onExplicitShowRequested()
+        }
+        return accepted
     }
 
     override fun onComputeInsets(outInsets: InputMethodService.Insets?) {
@@ -3234,6 +3242,7 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         val isEditable = state.isEditable
         val isReallyEditable = state.isReallyEditable
         isInputViewActive = isEditable
+        keyboardVisibilityController.onInputStarted(restarting)
         
         if (restarting) {
             enforceSmartFeatureDisabledState()
@@ -4548,13 +4557,13 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
                 ctrlLatchActive = ctrlLatchActive,
                 isInputViewActive = isInputViewActive,
                 isImeSurfaceRequestedOrShown =
-                    keyboardVisibilityController.isExpectedSurfaceRequestedOrShown(),
+                    !keyboardVisibilityController.shouldRecoverSurfaceOnHardwareKey(),
                 hasInputConnection = hasEditableField
             ),
             callbacks = InputEventRouter.EditableFieldKeyDownCallbacks(
                 exitNavMode = { navModeController.exitNavMode() },
                 ensureImeSurfaceVisible = {
-                    keyboardVisibilityController.ensureImeSurfaceVisible()
+                    keyboardVisibilityController.onHardwareInputRequested()
                 },
                 callSuper = { super.onKeyDown(keyCode, event) }
             )
@@ -4720,9 +4729,9 @@ class PhysicalKeyboardInputMethodService : InputMethodService(), ClicksAccessibi
         )
         if (
             isInputViewActive &&
-            !keyboardVisibilityController.isExpectedSurfaceRequestedOrShown()
+            keyboardVisibilityController.shouldRecoverSurfaceOnHardwareKey()
         ) {
-            ensureImeSurfaceVisible()
+            keyboardVisibilityController.onHardwareInputRequested()
         }
         val ctrlActiveNow = event?.isCtrlPressed == true ||
             ctrlPressed ||
