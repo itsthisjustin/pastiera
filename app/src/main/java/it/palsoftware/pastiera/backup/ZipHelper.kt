@@ -30,12 +30,16 @@ object ZipHelper {
         ZipInputStream(BufferedInputStream(inputStream)).use { zipIn ->
             var entry = zipIn.nextEntry
             val canonicalTargetRoot = targetDir.canonicalFile
+            val canonicalTargetPath = canonicalTargetRoot.toPath()
 
             while (entry != null) {
                 val entryName = entry.name.removePrefix("./")
+                if (File(entryName).isAbsolute) {
+                    throw IllegalStateException("Refusing to unzip absolute entry: $entryName")
+                }
                 val outFile = File(targetDir, entryName)
                 val canonicalOutFile = outFile.canonicalFile
-                if (!canonicalOutFile.path.startsWith(canonicalTargetRoot.path)) {
+                if (!canonicalOutFile.toPath().startsWith(canonicalTargetPath)) {
                     throw IllegalStateException("Refusing to unzip entry outside target dir: $entryName")
                 }
 
