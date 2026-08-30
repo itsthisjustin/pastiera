@@ -311,9 +311,12 @@ class SuggestionController(
         }
         ensureDictionaryLoaded()
 
-        // CRITICAL FIX: Sync tracker with actual text before processing boundary
-        // The cursor debounce can cause tracker to be out of sync with the actual text field
-        if (inputConnection != null && dictionaryRepository.isReady) {
+        // Exact text replacements do not depend on dictionary suggestions. In particular,
+        // onCharacterCommitted intentionally does not track characters while experimental
+        // suggestions are disabled, so the editor is the source of truth at a boundary.
+        // Keep this synchronous and independent of repository readiness: waiting for an
+        // asynchronous dictionary load would lose the boundary that triggered the replacement.
+        if (inputConnection != null) {
             val word = extractWordAtCursor(inputConnection, includeAfterCursor = false)
             if (!word.isNullOrBlank()) {
                 tracker.setWord(word, notify = false)
