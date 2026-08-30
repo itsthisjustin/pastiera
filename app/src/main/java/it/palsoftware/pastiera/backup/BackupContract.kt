@@ -476,10 +476,6 @@ object PreferenceSchemas {
             ?: if (prefName == "pastiera_prefs") restoreOnlyPastieraKeys[key] else null
     }
 
-    fun isRecognized(prefName: String, key: String, currentKeys: Set<String>): Boolean {
-        if (currentKeys.contains(key)) {
-            return true
-        }
-        return expectedType(prefName, key) != null
-    }
+    fun isRecognized(prefName: String, key: String): Boolean =
+        expectedType(prefName, key) != null
 }

@@ -252,6 +252,36 @@ class RestoreManagerIntegrationTest {
     }
 
     @Test
+    fun restore_existingUnknownKeyIsSkippedWhileRestoreOnlyLegacyKeyIsApplied() {
+        val preferences = context.getSharedPreferences("pastiera_prefs", Context.MODE_PRIVATE)
+        val unknownKey = "unclassified_existing_restore_test"
+        val restoreOnlyKey = "restore_sym_page"
+        preferences.edit()
+            .putString(unknownKey, "keep-existing")
+            .remove(restoreOnlyKey)
+            .commit()
+
+        try {
+            val summary = PreferencesBackupHelper.restorePreferences(
+                context,
+                mapOf(
+                    "pastiera_prefs" to mapOf(
+                        unknownKey to PreferenceValue(PreferenceValueType.STRING, "backup-value"),
+                        restoreOnlyKey to PreferenceValue(PreferenceValueType.INT, 4)
+                    )
+                )
+            )
+
+            assertEquals(listOf("pastiera_prefs:$restoreOnlyKey"), summary.appliedKeys)
+            assertEquals(listOf("pastiera_prefs:$unknownKey"), summary.skippedKeys)
+            assertEquals("keep-existing", preferences.getString(unknownKey, null))
+            assertEquals(4, preferences.getInt(restoreOnlyKey, -1))
+        } finally {
+            preferences.edit().remove(unknownKey).remove(restoreOnlyKey).commit()
+        }
+    }
+
+    @Test
     fun inspect_doesNotApplyPreferences() = runBlocking {
         val preferences = context.getSharedPreferences("pastiera_prefs", Context.MODE_PRIVATE)
         preferences.edit().putString("keyboard_layout", "qwertz").commit()

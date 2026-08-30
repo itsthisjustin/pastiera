@@ -147,7 +147,6 @@ object PreferencesBackupHelper {
 
         backedUpPrefs.forEach { (prefName, entries) ->
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
-            val currentKeys = prefs.all.keys
             val editor = prefs.edit()
 
             entries.forEach { (key, value) ->
@@ -157,7 +156,7 @@ object PreferencesBackupHelper {
                     return@forEach
                 }
                 val expectedType = PreferenceSchemas.expectedType(prefName, key)
-                val recognized = PreferenceSchemas.isRecognized(prefName, key, currentKeys)
+                val recognized = PreferenceSchemas.isRecognized(prefName, key)
                 if (!recognized) {
                     Log.w(TAG, "Ignoring unknown preference key $key for $prefName")
                     skipped.add(qualifiedKey)

@@ -72,8 +72,7 @@ class RestoreManagerAndBackupContractTest {
     fun userDictionaryEntries_isRecognizedForFreshInstallRestore() {
         val recognized = PreferenceSchemas.isRecognized(
             prefName = "pastiera_prefs",
-            key = "user_dictionary_entries",
-            currentKeys = emptySet()
+            key = "user_dictionary_entries"
         )
 
         assertTrue(recognized)
@@ -109,7 +108,7 @@ class RestoreManagerAndBackupContractTest {
             "snippets_accept_with_enter" to PreferenceValueType.BOOLEAN
         )
         expected.forEach { (key, type) ->
-            assertTrue(PreferenceSchemas.isRecognized("pastiera_prefs", key, emptySet()))
+            assertTrue(PreferenceSchemas.isRecognized("pastiera_prefs", key))
             assertEquals(type, PreferenceSchemas.expectedType("pastiera_prefs", key))
         }
     }
@@ -127,7 +126,7 @@ class RestoreManagerAndBackupContractTest {
             "emoji_symbols_exact_on_close" to PreferenceValueType.BOOLEAN
         )
         expected.forEach { (key, type) ->
-            assertTrue(PreferenceSchemas.isRecognized("pastiera_prefs", key, emptySet()))
+            assertTrue(PreferenceSchemas.isRecognized("pastiera_prefs", key))
             assertEquals(type, PreferenceSchemas.expectedType("pastiera_prefs", key))
         }
     }
@@ -271,15 +270,13 @@ class RestoreManagerAndBackupContractTest {
         assertTrue(
             PreferenceSchemas.isRecognized(
                 prefName = "pastiera_prefs",
-                key = "clicks_power_keyboard_snapshots_v1",
-                currentKeys = emptySet()
+                key = "clicks_power_keyboard_snapshots_v1"
             )
         )
         assertTrue(
             PreferenceSchemas.isRecognized(
                 prefName = "pastiera_prefs",
-                key = "clicks_power_soc_calibration_PK-42",
-                currentKeys = emptySet()
+                key = "clicks_power_soc_calibration_PK-42"
             )
         )
     }
