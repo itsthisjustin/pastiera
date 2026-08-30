@@ -123,41 +123,34 @@ fun KeyboardLayoutSettingsScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val uri = result.data?.data
-            if (uri != null) {
-                try {
-                    val jsonString = context.contentResolver.openInputStream(uri)?.use { input ->
+            try {
+                val jsonString = uri?.let { selectedUri ->
+                    context.contentResolver.openInputStream(selectedUri)?.use { input ->
                         input.bufferedReader(Charsets.UTF_8).readText()
                     }
-                    if (!jsonString.isNullOrBlank()) {
-                        val layoutName = runCatching {
-                            val obj = JSONObject(jsonString)
-                            obj.optString("name").takeIf { it.isNotBlank() }
-                        }.getOrNull() ?: "imported_${System.currentTimeMillis()}"
-                        
-                        when (val importResult = LayoutFileStore.saveLayoutFromJson(context, layoutName, jsonString)) {
-                            is LayoutImportResult.Success -> {
-                                refreshTrigger++            // ricarica lista layout
-                                selectedLayout = importResult.layoutName // seleziona l'importato
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        context.getString(R.string.layout_imported_successfully)
-                                    )
-                                }
-                            }
-                            is LayoutImportResult.Failure -> {
-                                val message = context.getString(importResult.error.messageResource())
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(message)
-                                }
-                            }
+                }
+                when (val importResult = importKeyboardLayoutDocument(context, jsonString)) {
+                    is LayoutImportResult.Success -> {
+                        refreshTrigger++            // ricarica lista layout
+                        selectedLayout = importResult.layoutName // seleziona l'importato
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                context.getString(R.string.layout_imported_successfully)
+                            )
                         }
                     }
-                } catch (e: Exception) {
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(
-                            context.getString(R.string.layout_import_error, e.message ?: "")
-                        )
+                    is LayoutImportResult.Failure -> {
+                        val message = context.getString(importResult.error.messageResource())
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(message)
+                        }
                     }
+                }
+            } catch (e: Exception) {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.layout_import_error, e.message ?: "")
+                    )
                 }
             }
         }
@@ -543,6 +536,20 @@ private fun LayoutImportError.messageResource(): Int = when (this) {
     LayoutImportError.INVALID_NAME -> R.string.layout_import_invalid_name
     LayoutImportError.NAME_CONFLICT -> R.string.layout_import_name_conflict
     LayoutImportError.WRITE_FAILED -> R.string.layout_import_write_failed
+}
+
+internal fun importKeyboardLayoutDocument(
+    context: Context,
+    jsonString: String?
+): LayoutImportResult {
+    if (jsonString.isNullOrBlank()) {
+        return LayoutImportResult.Failure(LayoutImportError.MALFORMED_JSON)
+    }
+    val layoutName = runCatching {
+        val obj = JSONObject(jsonString)
+        obj.optString("name").takeIf { it.isNotBlank() }
+    }.getOrNull() ?: "imported_${System.currentTimeMillis()}"
+    return LayoutFileStore.saveLayoutFromJson(context, layoutName, jsonString)
 }
 
 /**
