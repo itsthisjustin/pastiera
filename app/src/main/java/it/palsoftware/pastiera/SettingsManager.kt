@@ -1137,12 +1137,72 @@ object SettingsManager {
 
     fun keyboardThemeFromJsonString(value: String): KeyboardThemeSettings? {
         return try {
-            keyboardThemeFromJson(JSONObject(value), defaultKeyboardTheme())
+            val json = JSONObject(value)
+            if (!hasCompleteKeyboardThemeSchema(json)) return null
+            keyboardThemeFromJson(json, defaultKeyboardTheme())
         } catch (error: Exception) {
             Log.e(TAG, "Fehler beim Importieren des Keyboard-Themes", error)
             null
         }
     }
+
+    private fun hasCompleteKeyboardThemeSchema(json: JSONObject): Boolean {
+        val integerKeys = listOf(
+            "background",
+            "divider",
+            "normal_key",
+            "special_key",
+            "text_and_icons",
+            "led_inactive",
+            "led_active",
+            "led_locked",
+            "accent",
+            "cursor_swipe",
+            "key_popup",
+            "key_popup_selected",
+            "suggestion",
+            "status_bar_button"
+        )
+        val floatKeys = listOf(
+            "key_corner_radius_ratio",
+            "chrome_corner_radius_ratio",
+            "key_height_scale",
+            "number_row_height_scale",
+            "key_width_scale",
+            "row_gap_scale",
+            "suggestions_height_scale",
+            "variations_height_scale"
+        )
+        val booleanKeys = listOf(
+            "distribute_horizontal_spacing",
+            "ortholinear",
+            "show_leds",
+            "key_popup_attached",
+            "key_popup_tail_enabled",
+            "key_preview_after_long_press",
+            "key_alternates_popup_enabled"
+        )
+
+        if (!integerKeys.all { key -> json.opt(key).isJsonInt() }) return false
+        if (!floatKeys.all { key -> json.opt(key).isFiniteJsonNumber() }) return false
+        if (!booleanKeys.all { key -> json.opt(key) is Boolean }) return false
+        return json.opt("key_popup_style") in setOf(
+            KEYBOARD_THEME_POPUP_STYLE_FLOATING,
+            KEYBOARD_THEME_POPUP_STYLE_CLASSIC
+        )
+    }
+
+    private fun Any?.isJsonInt(): Boolean {
+        val number = this as? Number ?: return false
+        val doubleValue = number.toDouble()
+        return doubleValue.isFinite() &&
+            doubleValue % 1.0 == 0.0 &&
+            doubleValue >= Int.MIN_VALUE.toDouble() &&
+            doubleValue <= Int.MAX_VALUE.toDouble()
+    }
+
+    private fun Any?.isFiniteJsonNumber(): Boolean =
+        (this as? Number)?.toDouble()?.isFinite() == true
 
     fun getSavedKeyboardThemes(context: Context): List<NamedKeyboardTheme> {
         val stored = getPreferences(context).getString(KEY_KEYBOARD_THEME_SAVED_THEMES, null)

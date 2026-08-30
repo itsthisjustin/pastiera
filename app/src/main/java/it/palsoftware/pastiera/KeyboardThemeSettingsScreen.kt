@@ -188,6 +188,7 @@ fun KeyboardThemeScreen(
     var exportTheme by remember { mutableStateOf<KeyboardThemePreset?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var showSaveAsDialog by remember { mutableStateOf(false) }
+    var pendingImportedTheme by remember { mutableStateOf<KeyboardThemePreset?>(null) }
     var showNewDraftDialog by remember { mutableStateOf(false) }
     var draftEditorName by remember { mutableStateOf<String?>(null) }
     val draftEditingGuard = remember { mutableStateOf(false) }
@@ -283,22 +284,9 @@ fun KeyboardThemeScreen(
         }
     }
 
-    fun applyImportedTheme(theme: KeyboardThemePreset) {
-        if (activePreviewPage == 0) {
-            hardwareSelectionKey = "custom:imported:hardware"
-            hardwarePreset = theme
-            hardwareTheme = theme
-            SettingsManager.setKeyboardTheme(context, SettingsManager.KeyboardThemeTarget.HARDWARE, theme.toSettingsTheme())
-        } else {
-            softwareSelectionKey = "custom:imported:software"
-            softwarePreset = theme
-            softwareTheme = theme
-            SettingsManager.setKeyboardTheme(context, SettingsManager.KeyboardThemeTarget.SOFTWARE, theme.toSettingsTheme())
-        }
-    }
-
     fun saveActiveThemeAs(name: String) {
-        val normalizedName = name.trim().ifEmpty { "Custom" }
+        val normalizedName = name.trim()
+        if (normalizedName.isEmpty() || keyboardThemeNameExists(context, normalizedName)) return
         val savedPreset = activeTheme.copy(name = normalizedName)
         SettingsManager.saveKeyboardTheme(context, normalizedName, savedPreset.toSettingsTheme())
         savedThemes = SettingsManager.getSavedKeyboardThemes(context).map { it.toKeyboardThemeOption() }
@@ -565,7 +553,15 @@ fun KeyboardThemeScreen(
                     onClick = { showSaveAsDialog = true },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(stringResource(R.string.keyboard_theme_action_duplicate))
+                    Text(
+                        stringResource(
+                            if (editedDraft != null) {
+                                R.string.keyboard_theme_action_duplicate_draft
+                            } else {
+                                R.string.keyboard_theme_action_save_as
+                            }
+                        )
+                    )
                 }
                 Button(
                     onClick = { exportTheme = draftPreset ?: activeTheme },
@@ -776,17 +772,71 @@ fun KeyboardThemeScreen(
             onDismiss = { showImportDialog = false },
             onImport = { importedTheme ->
                 showImportDialog = false
-                applyImportedTheme(importedTheme)
+                if (editedDraft != null) {
+                    val importedDraft = importedKeyboardThemeDraft(
+                        draft = editedDraft,
+                        importedTheme = importedTheme.toSettingsTheme()
+                    )
+                    SettingsManager.saveKeyboardThemeDraft(context, importedDraft)
+                    themeDrafts = SettingsManager.getKeyboardThemeDrafts(context)
+                    draftEditorName = importedDraft.name
+                    draftListFocusName = importedDraft.name
+                } else {
+                    pendingImportedTheme = importedTheme
+                }
             }
         )
     }
-    if (showSaveAsDialog) {
-        KeyboardThemeSaveAsDialog(
-            initialName = draftPreset?.name ?: activeTheme.name,
-            onDismiss = { showSaveAsDialog = false },
+    if (showSaveAsDialog || pendingImportedTheme != null) {
+        val importingTheme = pendingImportedTheme
+        val duplicatingDraft = importingTheme == null && editedDraft != null
+        KeyboardThemeNameDialog(
+            initialName = importingTheme?.name ?: draftPreset?.name ?: activeTheme.name,
+            existingNames = (savedThemes.map { it.preset.name } + themeDrafts.map { it.name }).toSet(),
+            title = stringResource(
+                when {
+                    importingTheme != null -> R.string.keyboard_theme_import_name_title
+                    duplicatingDraft -> R.string.keyboard_theme_duplicate_draft_title
+                    else -> R.string.keyboard_theme_save_as_title
+                }
+            ),
+            confirmLabel = stringResource(
+                when {
+                    importingTheme != null -> R.string.keyboard_theme_import_save
+                    duplicatingDraft -> R.string.keyboard_theme_action_duplicate_draft
+                    else -> R.string.keyboard_theme_action_save_as
+                }
+            ),
+            onDismiss = {
+                showSaveAsDialog = false
+                pendingImportedTheme = null
+            },
             onSave = { name ->
                 showSaveAsDialog = false
-                if (editedDraft != null) {
+                if (importingTheme != null) {
+                    val normalizedName = name.trim()
+                    if (
+                        saveImportedKeyboardTheme(
+                            context = context,
+                            target = activeTarget,
+                            name = normalizedName,
+                            importedTheme = importingTheme.toSettingsTheme()
+                        )
+                    ) {
+                        val savedPreset = importingTheme.copy(name = normalizedName)
+                        savedThemes = SettingsManager.getSavedKeyboardThemes(context).map { it.toKeyboardThemeOption() }
+                        if (activeTarget == SettingsManager.KeyboardThemeTarget.HARDWARE) {
+                            hardwareSelectionKey = "saved:$normalizedName"
+                            hardwarePreset = savedPreset
+                            hardwareTheme = savedPreset
+                        } else {
+                            softwareSelectionKey = "saved:$normalizedName"
+                            softwarePreset = savedPreset
+                            softwareTheme = savedPreset
+                        }
+                    }
+                    pendingImportedTheme = null
+                } else if (editedDraft != null) {
                     val duplicate = editedDraft.copy(name = name.trim())
                     SettingsManager.saveKeyboardThemeDraft(context, duplicate)
                     themeDrafts = SettingsManager.getKeyboardThemeDrafts(context)
@@ -1066,70 +1116,35 @@ private fun KeyboardThemeNewDraftDialog(
         }
     )
 }
-private const val DRAFT_BACKGROUND = "background"
-private const val DRAFT_DIVIDER = "divider"
-private const val DRAFT_NORMAL_KEY = "normal_key"
-private const val DRAFT_SPECIAL_KEY = "special_key"
-private const val DRAFT_TEXT_ICONS = "text_icons"
-private const val DRAFT_ACCENT = "accent"
-private const val DRAFT_SUGGESTION = "suggestion"
-private const val DRAFT_STATUS_BUTTON = "status_button"
-private const val DRAFT_CURSOR_SWIPE = "cursor_swipe"
-private const val DRAFT_KEY_POPUP = "key_popup"
-private const val DRAFT_KEY_POPUP_SELECTED = "key_popup_selected"
-private const val DRAFT_LED_INACTIVE = "led_inactive"
-private const val DRAFT_LED_ACTIVE = "led_active"
-private const val DRAFT_LED_LOCKED = "led_locked"
-private const val DRAFT_KEY_ROUNDING = "key_rounding"
-private const val DRAFT_CHROME_ROUNDING = "chrome_rounding"
-private const val DRAFT_KEY_HEIGHT = "key_height"
-private const val DRAFT_NUMBER_ROW_HEIGHT = "number_row_height"
-private const val DRAFT_KEY_WIDTH = "key_width"
-private const val DRAFT_ROW_SPACING = "row_spacing"
-private const val DRAFT_SUGGESTIONS_HEIGHT = "suggestions_height"
-private const val DRAFT_VARIATIONS_HEIGHT = "variations_height"
-private const val DRAFT_SHOW_LEDS = "show_leds"
-private const val DRAFT_DISTRIBUTE_SPACING = "distribute_spacing"
-private const val DRAFT_ORTHOLINEAR = "ortholinear"
-private const val DRAFT_ATTACH_POPUP = "attach_popup"
-private const val DRAFT_POPUP_TAIL = "popup_tail"
-private const val DRAFT_PREVIEW_ON_HOLD = "preview_on_hold"
-private const val DRAFT_CHARACTER_PICKER = "character_picker"
-
-private val KEYBOARD_THEME_DRAFT_PREVIEW_FIELDS = setOf(
-    DRAFT_BACKGROUND,
-    DRAFT_DIVIDER,
-    DRAFT_NORMAL_KEY,
-    DRAFT_SPECIAL_KEY,
-    DRAFT_TEXT_ICONS,
-    DRAFT_ACCENT,
-    DRAFT_SUGGESTION,
-    DRAFT_STATUS_BUTTON,
-    DRAFT_CURSOR_SWIPE,
-    DRAFT_KEY_POPUP,
-    DRAFT_KEY_POPUP_SELECTED,
-    DRAFT_LED_INACTIVE,
-    DRAFT_LED_ACTIVE,
-    DRAFT_LED_LOCKED
-)
-
-private val KEYBOARD_THEME_DRAFT_REQUIRED_FIELDS = KEYBOARD_THEME_DRAFT_PREVIEW_FIELDS + setOf(
-    DRAFT_KEY_ROUNDING,
-    DRAFT_CHROME_ROUNDING,
-    DRAFT_KEY_HEIGHT,
-    DRAFT_NUMBER_ROW_HEIGHT,
-    DRAFT_KEY_WIDTH,
-    DRAFT_ROW_SPACING,
-    DRAFT_SUGGESTIONS_HEIGHT,
-    DRAFT_VARIATIONS_HEIGHT,
-    DRAFT_SHOW_LEDS,
-    DRAFT_DISTRIBUTE_SPACING,
-    DRAFT_ORTHOLINEAR,
-    DRAFT_ATTACH_POPUP,
-    DRAFT_POPUP_TAIL,
-    DRAFT_PREVIEW_ON_HOLD,
-    DRAFT_CHARACTER_PICKER
-)
+internal const val DRAFT_BACKGROUND = "background"
+internal const val DRAFT_DIVIDER = "divider"
+internal const val DRAFT_NORMAL_KEY = "normal_key"
+internal const val DRAFT_SPECIAL_KEY = "special_key"
+internal const val DRAFT_TEXT_ICONS = "text_icons"
+internal const val DRAFT_ACCENT = "accent"
+internal const val DRAFT_SUGGESTION = "suggestion"
+internal const val DRAFT_STATUS_BUTTON = "status_button"
+internal const val DRAFT_CURSOR_SWIPE = "cursor_swipe"
+internal const val DRAFT_KEY_POPUP = "key_popup"
+internal const val DRAFT_KEY_POPUP_SELECTED = "key_popup_selected"
+internal const val DRAFT_LED_INACTIVE = "led_inactive"
+internal const val DRAFT_LED_ACTIVE = "led_active"
+internal const val DRAFT_LED_LOCKED = "led_locked"
+internal const val DRAFT_KEY_ROUNDING = "key_rounding"
+internal const val DRAFT_CHROME_ROUNDING = "chrome_rounding"
+internal const val DRAFT_KEY_HEIGHT = "key_height"
+internal const val DRAFT_NUMBER_ROW_HEIGHT = "number_row_height"
+internal const val DRAFT_KEY_WIDTH = "key_width"
+internal const val DRAFT_ROW_SPACING = "row_spacing"
+internal const val DRAFT_SUGGESTIONS_HEIGHT = "suggestions_height"
+internal const val DRAFT_VARIATIONS_HEIGHT = "variations_height"
+internal const val DRAFT_SHOW_LEDS = "show_leds"
+internal const val DRAFT_DISTRIBUTE_SPACING = "distribute_spacing"
+internal const val DRAFT_ORTHOLINEAR = "ortholinear"
+internal const val DRAFT_ATTACH_POPUP = "attach_popup"
+internal const val DRAFT_POPUP_TAIL = "popup_tail"
+internal const val DRAFT_PREVIEW_ON_HOLD = "preview_on_hold"
+internal const val DRAFT_CHARACTER_PICKER = "character_picker"
 
 private data class KeyboardThemePickerRequest(
     val target: SettingsManager.KeyboardThemeTarget,
@@ -1812,11 +1827,12 @@ private fun KeyboardThemeImportDialog(
     onDismiss: () -> Unit,
     onImport: (KeyboardThemePreset) -> Unit
 ) {
+    val invalidMessage = stringResource(R.string.keyboard_theme_import_invalid)
     var value by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import theme") },
+        title = { Text(stringResource(R.string.keyboard_theme_import_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -1828,7 +1844,7 @@ private fun KeyboardThemeImportDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 4,
                     maxLines = 8,
-                    label = { Text("Theme string") }
+                    label = { Text(stringResource(R.string.keyboard_theme_import_string)) }
                 )
                 error?.let {
                     Text(
@@ -1844,53 +1860,64 @@ private fun KeyboardThemeImportDialog(
                 onClick = {
                     val imported = SettingsManager.keyboardThemeFromJsonString(value)
                     if (imported == null) {
-                        error = "Invalid theme string"
+                        error = invalidMessage
                     } else {
                         onImport(imported.toKeyboardThemePreset("Imported"))
                     }
                 }
             ) {
-                Text("Import")
+                Text(stringResource(R.string.keyboard_theme_action_import))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
 }
 
 @Composable
-private fun KeyboardThemeSaveAsDialog(
+private fun KeyboardThemeNameDialog(
     initialName: String,
+    existingNames: Set<String>,
+    title: String,
+    confirmLabel: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
 ) {
     var name by remember(initialName) { mutableStateOf(initialName.takeUnless { it == "Custom" } ?: "") }
+    val normalizedName = name.trim()
+    val duplicate = existingNames.any { it.equals(normalizedName, ignoreCase = true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.keyboard_theme_duplicate_title)) },
+        title = { Text(title) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Theme name") }
+                label = { Text(stringResource(R.string.keyboard_theme_name)) },
+                isError = duplicate,
+                supportingText = if (duplicate) {
+                    ({ Text(stringResource(R.string.keyboard_theme_name_exists)) })
+                } else {
+                    null
+                }
             )
         },
         confirmButton = {
             TextButton(
-                enabled = name.trim().isNotEmpty(),
-                onClick = { onSave(name) }
+                enabled = normalizedName.isNotEmpty() && !duplicate,
+                onClick = { onSave(normalizedName) }
             ) {
-                Text(stringResource(R.string.keyboard_theme_action_duplicate))
+                Text(confirmLabel)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
