@@ -11,6 +11,20 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 object ZipHelper {
+    // A rich migration backup currently uses only a handful of small entries. These limits still
+    // leave ample room for the separately bounded 16 MiB typing-sound pack and future user data.
+    internal val DEFAULT_EXTRACTION_LIMITS = ExtractionLimits(
+        maxEntries = 1_024,
+        maxEntryBytes = 32L * 1024L * 1024L,
+        maxTotalBytes = 64L * 1024L * 1024L
+    )
+
+    internal data class ExtractionLimits(
+        val maxEntries: Int,
+        val maxEntryBytes: Long,
+        val maxTotalBytes: Long
+    )
+
     fun zip(sourceDir: File, outputStream: OutputStream) {
         ZipOutputStream(BufferedOutputStream(outputStream)).use { zipOut ->
             val basePath = sourceDir.toPath()
@@ -27,12 +41,26 @@ object ZipHelper {
     }
 
     fun unzip(inputStream: InputStream, targetDir: File) {
+        unzipWithLimits(inputStream, targetDir, DEFAULT_EXTRACTION_LIMITS)
+    }
+
+    internal fun unzipWithLimits(
+        inputStream: InputStream,
+        targetDir: File,
+        limits: ExtractionLimits
+    ) {
         ZipInputStream(BufferedInputStream(inputStream)).use { zipIn ->
             var entry = zipIn.nextEntry
             val canonicalTargetRoot = targetDir.canonicalFile
             val canonicalTargetPath = canonicalTargetRoot.toPath()
+            var entryCount = 0
+            var totalBytes = 0L
 
             while (entry != null) {
+                entryCount += 1
+                if (entryCount > limits.maxEntries) {
+                    throw IllegalStateException("Refusing to unzip archive with too many entries")
+                }
                 val entryName = entry.name.removePrefix("./")
                 if (File(entryName).isAbsolute) {
                     throw IllegalStateException("Refusing to unzip absolute entry: $entryName")
@@ -48,7 +76,7 @@ object ZipHelper {
                 } else {
                     canonicalOutFile.parentFile?.mkdirs()
                     FileOutputStream(canonicalOutFile).use { output ->
-                        zipIn.copyTo(output)
+                        totalBytes = copyEntryWithLimits(zipIn, output, totalBytes, limits)
                     }
                 }
 
@@ -56,5 +84,31 @@ object ZipHelper {
                 entry = zipIn.nextEntry
             }
         }
+    }
+
+    private fun copyEntryWithLimits(
+        input: InputStream,
+        output: OutputStream,
+        initialTotalBytes: Long,
+        limits: ExtractionLimits
+    ): Long {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var entryBytes = 0L
+        var totalBytes = initialTotalBytes
+        while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
+            if (read == 0) continue
+            if (read.toLong() > limits.maxEntryBytes - entryBytes) {
+                throw IllegalStateException("Refusing to unzip entry above size limit")
+            }
+            if (read.toLong() > limits.maxTotalBytes - totalBytes) {
+                throw IllegalStateException("Refusing to unzip archive above total size limit")
+            }
+            output.write(buffer, 0, read)
+            entryBytes += read
+            totalBytes += read
+        }
+        return totalBytes
     }
 }
