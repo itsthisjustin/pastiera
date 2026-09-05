@@ -59,6 +59,10 @@ class NestedStatusBarGeometryTest {
         measure()
         assertEquals(nestedHeight, chrome.measuredHeight)
 
+        row.layoutParams = (row.layoutParams as LinearLayout.LayoutParams).apply { height = 140 }
+        measure()
+        assertEquals("Side lights must begin at the top of a tall row", row.top, surface.top)
+
         expanded.visibility = View.VISIBLE
         chrome.requestLayout()
         measure()

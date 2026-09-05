@@ -3508,6 +3508,7 @@ class StatusBarController(
         private val originalIconTransforms = mutableMapOf<ImageView, Pair<ImageView.ScaleType, Matrix>>()
 
         private fun updateNestedStatusRow() {
+            indicatorView?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
             nestedRow?.let { row ->
                 (row.layoutParams as LayoutParams).apply {
                     leftMargin = originalRowMargins[0]
@@ -3539,7 +3540,10 @@ class StatusBarController(
             params.leftMargin += inset
             params.rightMargin += inset
             // The LED surface draws first; overlap its empty center with the row.
-            val overlap = (radius + stripTop - inset).coerceAtLeast(0)
+            val requestedRowHeight = params.height.coerceAtLeast(0)
+            val bottomInset = (3.1f * resources.displayMetrics.density).toInt()
+            indicatorView?.layoutParams?.height = maxOf(radius + stripTop, requestedRowHeight + bottomInset)
+            val overlap = maxOf((radius + stripTop - inset).coerceAtLeast(0), requestedRowHeight)
             params.bottomMargin -= overlap
             row.minimumHeight = maxOf(originalRowMinHeight, overlap)
             row.outlineProvider = object : ViewOutlineProvider() {

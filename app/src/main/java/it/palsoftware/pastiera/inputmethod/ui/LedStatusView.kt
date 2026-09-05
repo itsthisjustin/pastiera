@@ -162,7 +162,8 @@ class LedStatusView(
                 val leftArc = leftRadius - inset
                 val rightArc = rightRadius - inset
                 val contour = Path().apply {
-                    moveTo(inset, height - leftRadius)
+                    moveTo(inset, 0f)
+                    lineTo(inset, height - leftRadius)
                     if (leftArc > 0f) {
                         arcTo(inset, height - leftRadius - leftArc,
                             leftRadius + leftArc, height - inset, 180f, -90f, false)
@@ -172,6 +173,7 @@ class LedStatusView(
                         arcTo(width - rightRadius - rightArc, height - rightRadius - rightArc,
                             width - inset, height - inset, 90f, -90f, false)
                     }
+                    lineTo(width - inset, 0f)
                 }
                 val measure = PathMeasure(contour, false)
                 paint.strokeWidth = segment.height * ledHeight
