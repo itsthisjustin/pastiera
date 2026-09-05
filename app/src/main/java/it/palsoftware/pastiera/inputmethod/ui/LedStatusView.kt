@@ -10,6 +10,7 @@ import android.graphics.PathMeasure
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.View
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import it.palsoftware.pastiera.R
@@ -53,7 +54,7 @@ class LedStatusView(
     private var container: ModifierLedCanvas? = null
     private val ledsByState = mutableMapOf<ModifierLedState, MutableList<View>>()
     private val segmentsByView = mutableMapOf<View, ModifierLedSegment>()
-    private val inactiveUpperStates = mutableSetOf(ModifierLedState.ALT, ModifierLedState.SYM)
+    private val statePriority = mutableMapOf<ModifierLedState, Int>()
 
     var bottomCornerRadiiPx: Pair<Int, Int>? = null
         set(value) {
@@ -147,11 +148,18 @@ class LedStatusView(
                     super.draw(canvas)
                     return
                 }
-                // Alt/Sym share the outer positions with Shift. Show the upper
-                // contour only when it carries an active modifier state.
-                if (layout == ModifierLedLayouts.TITAN_2_ELITE && segment.y == 0f &&
-                    segment.state in inactiveUpperStates
-                ) return
+                // One physical contour per side in rounded mode. Alt/Sym and
+                // Shift share it; a locked modifier wins over an active one.
+                if (layout == ModifierLedLayouts.TITAN_2_ELITE && segment.y == 0f) return
+                if (layout == ModifierLedLayouts.TITAN_2_ELITE && segment.state == ModifierLedState.SHIFT) {
+                    val otherState = if (segment.x < 0.5f) ModifierLedState.ALT else ModifierLedState.SYM
+                    val priority = maxOf(statePriority[ModifierLedState.SHIFT] ?: 0, statePriority[otherState] ?: 0)
+                    paint.color = when (priority) {
+                        2 -> themeOverride?.ledLocked ?: LED_COLOR_RED_LOCKED
+                        1 -> themeOverride?.ledActive ?: LED_COLOR_BLUE_ACTIVE
+                        else -> themeOverride?.ledInactive ?: LED_COLOR_GRAY_OFF
+                    }
+                }
                 val width = bounds.width().toFloat()
                 val height = bounds.height().toFloat()
                 // Each row follows a concentric contour, so the indicator retains
@@ -202,9 +210,7 @@ class LedStatusView(
     }
 
     private fun updateLeds(state: ModifierLedState, isLocked: Boolean, isActive: Boolean = false) {
-        if (state == ModifierLedState.ALT) {
-            if (isLocked || isActive) inactiveUpperStates.remove(state) else inactiveUpperStates.add(state)
-        }
+        statePriority[state] = if (isLocked) 2 else if (isActive) 1 else 0
         val theme = themeOverride
         val targetColor = when {
             isLocked -> theme?.ledLocked ?: LED_COLOR_RED_LOCKED
@@ -215,8 +221,7 @@ class LedStatusView(
     }
 
     private fun updateSymLeds(symPage: Int) {
-        if (symPage > 0) inactiveUpperStates.remove(ModifierLedState.SYM)
-        else inactiveUpperStates.add(ModifierLedState.SYM)
+        statePriority[ModifierLedState.SYM] = if (symPage == 2) 2 else if (symPage > 0) 1 else 0
         val theme = themeOverride
         val targetColor = when (symPage) {
             1 -> theme?.ledActive ?: LED_COLOR_BLUE_ACTIVE
@@ -226,6 +231,8 @@ class LedStatusView(
             else -> theme?.ledInactive ?: LED_COLOR_GRAY_OFF
         }
         ledsByState[ModifierLedState.SYM].orEmpty().forEach { led -> animateLedColor(led, targetColor) }
+        // The visible idle contour depends on both the upper and lower states.
+        ledsByState[ModifierLedState.SHIFT].orEmpty().forEach { it.invalidate() }
     }
 
     private fun animateLedColor(led: View?, targetColor: Int) {
@@ -253,6 +260,18 @@ class LedStatusView(
         private val contentHeightPx: Int
     ) : ViewGroup(context) {
         private val segments = mutableListOf<ModifierLedSegment>()
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            // Rounded indicators overlap the controls. Their transparent center
+            // must not become a full-row long-press target above those controls.
+            if (cornerRadiiPx != null && event.actionMasked == MotionEvent.ACTION_DOWN) {
+                val edge = 3.1f * resources.displayMetrics.density
+                if (event.x > edge && event.x < width - edge && event.y < height - edge) {
+                    return false
+                }
+            }
+            return super.dispatchTouchEvent(event)
+        }
+
         var cornerRadiiPx: Pair<Int, Int>? = null
             set(value) {
                 field = value

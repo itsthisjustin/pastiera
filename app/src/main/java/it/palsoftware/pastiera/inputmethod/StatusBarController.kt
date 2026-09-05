@@ -266,6 +266,7 @@ class StatusBarController(
         private const val TAG = "StatusBarController"
         private val DEFAULT_BACKGROUND = Color.parseColor("#000000")
         private const val TITAN_2_ELITE_CORNER_FALLBACK_RADIUS_DP = 50f
+        private const val HARDWARE_SYM_KEY_HEIGHT_DP = 56f
     }
 
     data class StatusSnapshot(
@@ -459,6 +460,8 @@ class StatusBarController(
                 if (compactButtons.any { it.position == StatusBarButtonPosition.RIGHT }) activeColors.statusBarButton else activeColors.suggestion
             )
             chrome.bottomFillColors = activeColors.normalKey to activeColors.suggestion
+            chrome.expandedCloseColor = activeColors.statusBarButton
+            chrome.expandedKeyHeightPx = hardwareSymKeyHeightPx(activeColors)
             chrome.invalidate()
         }
         emojiKeyboardContainer?.setBackgroundColor(activeColors.background)
@@ -790,6 +793,7 @@ class StatusBarController(
                 indicatorView = ledStrip
                 expandedSurfaceView = emojiKeyboardContainer
                 compactStatusRow = fullSuggestionsBar?.ensureView()
+                expandedCloseButton = symSurfaceCloseButton
             }
             applyChromeZOrder()
             applyAccessibilitySecondRowReadPreference()
@@ -1157,6 +1161,9 @@ class StatusBarController(
             }
         }
         view.configureSoftwareKeyboardMode(softwareKeyboardHeight)
+        view.configureRoundedLayout(
+            SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+        )
         view.setInputConnection(inputConnection)
 
         // Refresh only when needed (data changed), otherwise keep the list stable.
@@ -1235,6 +1242,13 @@ class StatusBarController(
                 onKeyboardLayoutRequested = null
             )
         }
+        val roundedControls = SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context) && !pickerShownAboveSoftwareKeyboard
+        val colors = activeThemeColors()
+        val iconSize = if (pastierinaModeActive) {
+            (dpToPx(36f * colors.suggestionsHeightScale.coerceIn(0.65f, 1.6f)) - dpToPx(4f)) * 0.64f
+        } else minOf(dpToPx(24f).toFloat(), hardwareSymKeyHeightPx(colors) * 0.48f)
+        view.configureRoundedControls(roundedControls, hardwareSymKeyHeightPx(colors), iconSize)
+        (statusBarLayout as? ImeChromeLayout)?.expandedPickerButtons = if (roundedControls) view.edgeControls else null
         view.setInputConnection(inputConnection)
 
         // Only scroll to top when view is just added (first open or switching pages)
@@ -1334,7 +1348,9 @@ class StatusBarController(
     private fun updateEmojiKeyboard(symMappings: Map<Int, String>, page: Int, inputConnection: android.view.inputmethod.InputConnection? = null) {
         val container = emojiKeyboardContainer ?: return
         // Restore default padding for emoji/symbols pages.
-        container.setPadding(emojiKeyboardHorizontalPaddingPx, 0, emojiKeyboardHorizontalPaddingPx, 0)
+        val roundedCorners = SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+        val sidePadding = if (roundedCorners) 0 else emojiKeyboardHorizontalPaddingPx
+        container.setPadding(sidePadding, 0, sidePadding, 0)
         val inputConnectionChanged = lastInputConnectionUsed != inputConnection
         val inputConnectionBecameAvailable = lastInputConnectionUsed == null && inputConnection != null
         if (lastSymPageRendered == page && lastSymMappingsRendered == symMappings && !inputConnectionChanged && !inputConnectionBecameAvailable) {
@@ -1371,7 +1387,7 @@ class StatusBarController(
             android.view.KeyEvent.KEYCODE_N to "N", android.view.KeyEvent.KEYCODE_M to "M"
         )
         
-        val keySpacing = TypedValue.applyDimension(
+        val keySpacing = if (roundedCorners) 0 else TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             4f,
             context.resources.displayMetrics
@@ -1380,7 +1396,7 @@ class StatusBarController(
         // Calcola la larghezza fissa dei tasti basata sulla prima riga (10 caselle)
         val maxKeysInRow = 10 // Prima riga ha 10 caselle
         val screenWidth = context.resources.displayMetrics.widthPixels
-        val horizontalPadding = TypedValue.applyDimension(
+        val horizontalPadding = if (roundedCorners) 0 else TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             8f * 2, // padding sinistro + destro
             context.resources.displayMetrics
@@ -1389,11 +1405,7 @@ class StatusBarController(
         val totalSpacing = keySpacing * (maxKeysInRow - 1)
         val fixedKeyWidth = (availableWidth - totalSpacing) / maxKeysInRow
         
-        val keyHeight = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            56f,
-            context.resources.displayMetrics
-        ).toInt()
+        val keyHeight = hardwareSymKeyHeightPx()
         
         // Crea ogni riga della tastiera
         for ((rowIndex, row) in keyboardRows.withIndex()) {
@@ -2337,15 +2349,17 @@ class StatusBarController(
         )
         val drawable = GradientDrawable().apply {
             setColor(theme.normalKey)
-            setCornerRadius(cornerRadius)
-            setStroke(dpToPx(1f), theme.divider)
+            val roundedCorners = SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+            setCornerRadius(if (roundedCorners) 0f else cornerRadius)
+            if (!roundedCorners) setStroke(dpToPx(1f), theme.divider)
         }
         keyLayout.background = drawable
         
         // Emoji/carattere deve occupare tutto il tasto, centrata
         // Calcola textSize in base all'altezza disponibile (convertendo da pixel a sp)
         val heightInDp = height / context.resources.displayMetrics.density
-        val contentTextSize = if (page == 2) {
+        val roundedCorners = SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+        val contentTextSize = if (page == 2 || roundedCorners) {
             // Per caratteri unicode, usa una dimensione più piccola
             (heightInDp * 0.5f)
         } else {
@@ -2357,6 +2371,7 @@ class StatusBarController(
             text = content
             textSize = contentTextSize // textSize è in sp
             gravity = Gravity.CENTER
+            if (roundedCorners) setTextColor(theme.textAndIcons)
             // Per pagina 2 (caratteri), rendi bianco e in grassetto
             if (page == 2) {
                 setTextColor(theme.textAndIcons)
@@ -2532,6 +2547,65 @@ class StatusBarController(
         (symSurfaceCloseButton as? ImageView)?.apply {
             setColorFilter(theme.textAndIcons)
             background = createCloseButtonBackground(theme)
+            val rounded = SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+            (layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                val screenWidth = statusBarLayout?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                val rightInset = if (rounded) dpToPx(3.1f) else 0
+                val targetWidth = if (rounded) screenWidth - (screenWidth / 10) * 9 - rightInset else dpToPx(36f)
+                val targetHeight = if (rounded) hardwareSymKeyHeightPx(theme) else dpToPx(32f)
+                if (params.width != targetWidth || params.height != targetHeight || params.rightMargin != rightInset) {
+                    params.width = targetWidth
+                    params.height = targetHeight
+                    params.rightMargin = rightInset
+                    layoutParams = params
+                }
+            }
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(if (rounded) 12f else 4f), dpToPx(if (rounded) 12f else 4f))
+            if (rounded) {
+                background = ColorDrawable(theme.statusBarButton)
+                drawable?.let { icon ->
+                    val clipboardSize = if (pastierinaModeActive) {
+                        (dpToPx(36f * theme.suggestionsHeightScale.coerceIn(0.65f, 1.6f)) - dpToPx(4f)) * 0.64f
+                    } else {
+                        minOf(dpToPx(24f).toFloat(), dpToPx(55f * theme.variationsHeightScale.coerceIn(0.65f, 1.6f)) * 0.48f)
+                    }
+                    val scale = clipboardSize / icon.intrinsicHeight.coerceAtLeast(1)
+                    scaleType = ImageView.ScaleType.MATRIX
+                    imageMatrix = Matrix().apply {
+                        setScale(scale, scale)
+                        postTranslate(
+                            (layoutParams.width - icon.intrinsicWidth * scale) / 2f - paddingLeft - dpToPx(4f),
+                            (layoutParams.height - icon.intrinsicHeight * scale) / 2f - paddingTop - dpToPx(2f)
+                        )
+                    }
+                }
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        val displayRadius = (statusBarLayout as? ImeChromeLayout)?.bottomCornerRadiiPx?.second
+                            ?: dpToPx(TITAN_2_ELITE_CORNER_FALLBACK_RADIUS_DP)
+                        val radius = (displayRadius - reservedExpandedLedHeight()).coerceAtLeast(0).toFloat()
+                        val horizontalRadius = (displayRadius - dpToPx(3.1f)).coerceAtLeast(0).toFloat()
+                        val path = Path().apply {
+                            addRoundRect(
+                                RectF(0f, -2f * radius, view.width.toFloat(), view.height.toFloat()),
+                                floatArrayOf(0f, 0f, 0f, 0f, horizontalRadius, radius, 0f, 0f),
+                                Path.Direction.CW
+                            )
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outline.setPath(path)
+                        else {
+                            @Suppress("DEPRECATION")
+                            outline.setConvexPath(path)
+                        }
+                    }
+                }
+                clipToOutline = true
+                invalidateOutline()
+            } else {
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                clipToOutline = false
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+            }
         }
     }
 
@@ -2855,6 +2929,13 @@ class StatusBarController(
      * @param backgroundView Il view dello sfondo da impostare a opaco immediatamente
      */
     private fun animateEmojiKeyboardIn(view: View, backgroundView: View? = null) {
+        if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) {
+            view.alpha = 1f
+            view.translationY = 0f
+            view.visibility = View.VISIBLE
+            backgroundView?.setBackgroundColor(activeThemeColors().background)
+            return
+        }
         val height = view.height
         if (height == 0) {
             view.measure(
@@ -2899,6 +2980,13 @@ class StatusBarController(
      * @param onAnimationEnd Callback chiamato quando l'animazione è completata
      */
     private fun animateEmojiKeyboardOut(view: View, backgroundView: View? = null, onAnimationEnd: (() -> Unit)? = null) {
+        if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) {
+            view.visibility = View.GONE
+            view.translationY = 0f
+            view.alpha = 1f
+            onAnimationEnd?.invoke()
+            return
+        }
         val height = view.height
         if (height == 0) {
             view.visibility = View.GONE
@@ -3056,6 +3144,7 @@ class StatusBarController(
         val shouldShowSoftwareKeyboard =
             isFullSoftwareKeyboardMode &&
                 !snapshot.clipboardOverlay
+        (layout as? ImeChromeLayout)?.expandedPickerButtons = null
         (layout as? ImeChromeLayout)?.softwareKeyboardModeActive = shouldShowSoftwareKeyboard
         if (snapshot.clipboardOverlay) {
             // Show clipboard as dedicated overlay (not part of SYM pages)
@@ -3082,7 +3171,7 @@ class StatusBarController(
             emojiKeyboardView.setBackgroundColor(activeColors.background)
             emojiKeyboardView.visibility = View.VISIBLE
             val surfaceHeight = resolveSurfaceHeightWithOptionalLed(animationHeight, showLedStrip)
-            setSurfaceCloseVisible(false)
+            setSurfaceCloseVisible(SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context))
             applySymSurfaceLayout(symSurfaceView, symSurfaceStackView, emojiKeyboardView, surfaceHeight, reserveLedSpace = showLedStrip)
             if (!symShown && !wasSymActive) {
                 emojiKeyboardView.alpha = 1f
@@ -3195,7 +3284,9 @@ class StatusBarController(
             emojiKeyboardView.setBackgroundColor(activeColors.background)
             emojiKeyboardView.visibility = View.VISIBLE
             applySymSurfaceLayout(symSurfaceView, symSurfaceStackView, emojiKeyboardView, surfaceHeight, reserveLedSpace = showLedStrip)
-            setSurfaceCloseVisible(snapshot.symPage in listOf(1, 2, 5))
+            setSurfaceCloseVisible(snapshot.symPage in listOf(1, 2, 5) ||
+                (snapshot.symPage == 3 && SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) ||
+                (snapshot.symPage == 4 && (layout as? ImeChromeLayout)?.expandedPickerButtons != null))
             if (!symShown && !wasSymActive) {
                 emojiKeyboardView.alpha = 1f // keep black visible immediately
                 emojiKeyboardView.translationY = surfaceHeight.toFloat()
@@ -3382,7 +3473,7 @@ class StatusBarController(
             stackParams.height = ViewGroup.LayoutParams.MATCH_PARENT
             stack.layoutParams = stackParams
         }
-        updateSurfaceCloseBottomMargin(if (reserveLedSpace) measureLedStripHeight() else 0)
+        updateSurfaceCloseBottomMargin(if (reserveLedSpace) reservedExpandedLedHeight() else 0)
 
         val contentParams = content.layoutParams as? LinearLayout.LayoutParams
         val targetContentHeight = 0
@@ -3423,9 +3514,13 @@ class StatusBarController(
         if (!reserveLedSpace) {
             return contentHeight
         }
-        val ledHeight = measureLedStripHeight()
+        val ledHeight = reservedExpandedLedHeight()
         return contentHeight + ledHeight
     }
+
+    private fun reservedExpandedLedHeight(): Int =
+        if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) dpToPx(3.1f)
+        else measureLedStripHeight()
 
     private fun measureLedStripHeight(): Int {
         val ledStrip = ledStatusView.getView() ?: return 0
@@ -3457,6 +3552,12 @@ class StatusBarController(
         measuredHeight: Int,
         isFullSoftwareKeyboardMode: Boolean
     ): Int {
+        if (!isFullSoftwareKeyboardMode && snapshot.symPage in listOf(1, 2, 5)) {
+            // All hardware SYM pages use the same three key rows. Do not let
+            // measurement under the previous page's weighted layout resize them.
+            val gap = if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) 0 else dpToPx(4f)
+            return 3 * hardwareSymKeyHeightPx() + 2 * gap
+        }
         if (snapshot.symPage == 4 && measuredHeight > 0) {
             return measuredHeight
         }
@@ -3474,15 +3575,53 @@ class StatusBarController(
         ).toInt()
     }
 
+    private fun hardwareSymKeyHeightPx(theme: KeyboardThemeColors = activeThemeColors()): Int {
+        if (!SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) return dpToPx(HARDWARE_SYM_KEY_HEIGHT_DP)
+        return if (pastierinaModeActive) dpToPx(36f * theme.suggestionsHeightScale.coerceIn(0.65f, 1.6f))
+        else dpToPx(55f * theme.variationsHeightScale.coerceIn(0.65f, 1.6f))
+    }
+
     internal class ImeChromeLayout(context: Context) : LinearLayout(context) {
         private val screenAwakeController = ImeTouchScreenAwakeController(context)
         var regularCornerColors: Pair<Int, Int> = Color.BLACK to Color.BLACK
         var compactCornerColors: Pair<Int, Int> = Color.BLACK to Color.BLACK
         var bottomFillColors: Pair<Int, Int> = Color.BLACK to Color.BLACK
+        var expandedCloseColor: Int = Color.BLACK
+        var expandedCloseButton: View? = null
+        var expandedPickerButtons: Pair<View, View>? = null
+        var expandedKeyHeightPx: Int = (HARDWARE_SYM_KEY_HEIGHT_DP * resources.displayMetrics.density).toInt()
         private val cornerFillPaint = Paint()
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
+            if (bottomCornerRadiiPx != null && expandedSurfaceView?.visibility == View.VISIBLE) {
+                val surface = surfaceView
+                val content = expandedSurfaceView
+                if (surface != null && content != null) {
+                    cornerFillPaint.color = bottomFillColors.first
+                    canvas.drawRect(0f, (surface.top + content.bottom).toFloat(), width.toFloat(), height.toFloat(), cornerFillPaint)
+                    expandedCloseButton?.takeIf { it.visibility == View.VISIBLE }?.let { button ->
+                        cornerFillPaint.color = expandedCloseColor
+                        canvas.drawRect(
+                            (surface.left + button.left).toFloat(), (surface.top + button.top).toFloat(),
+                            width.toFloat(), height.toFloat(), cornerFillPaint
+                        )
+                    }
+                    expandedPickerButtons?.let { (leftButton, rightButton) ->
+                        listOf(leftButton, rightButton).forEach { button ->
+                            if (button.visibility != View.VISIBLE) return@forEach
+                            val bounds = android.graphics.Rect(0, 0, button.width, button.height)
+                            offsetDescendantRectToMyCoords(button, bounds)
+                            cornerFillPaint.color = expandedCloseColor
+                            canvas.drawRect(
+                                if (button === leftButton) 0f else bounds.left.toFloat(), bounds.top.toFloat(),
+                                if (button === rightButton) width.toFloat() else bounds.right.toFloat(),
+                                height.toFloat(), cornerFillPaint
+                            )
+                        }
+                    }
+                }
+            }
             val row = nestedRow ?: return
             val radii = bottomCornerRadiiPx ?: return
             val colors = if (row === compactStatusRow) compactCornerColors else regularCornerColors
@@ -3496,6 +3635,8 @@ class StatusBarController(
             // Children draw afterward, keeping the modifier lights above the fill.
             cornerFillPaint.color = if (row === compactStatusRow) bottomFillColors.second else bottomFillColors.first
             canvas.drawRect(0f, row.bottom.toFloat(), width.toFloat(), height.toFloat(), cornerFillPaint)
+            cornerFillPaint.color = colors.second
+            canvas.drawRect((width - radii.second).toFloat(), row.bottom.toFloat(), width.toFloat(), height.toFloat(), cornerFillPaint)
         }
         var indicatorView: View? = null
         var expandedSurfaceView: View? = null
@@ -3509,6 +3650,8 @@ class StatusBarController(
 
         private fun updateNestedStatusRow() {
             indicatorView?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            (indicatorView?.layoutParams as? LayoutParams)?.topMargin = 0
+            expandedSurfaceView?.clipToOutline = false
             nestedRow?.let { row ->
                 (row.layoutParams as LayoutParams).apply {
                     leftMargin = originalRowMargins[0]
@@ -3521,6 +3664,39 @@ class StatusBarController(
             }
             nestedRow = null
             val radii = bottomCornerRadiiPx ?: return
+            if (expandedSurfaceView?.visibility == View.VISIBLE && indicatorView?.visibility == View.VISIBLE) {
+                val density = resources.displayMetrics.density
+                val radius = maxOf(radii.first, radii.second)
+                val stripHeight = (3.1f * density).toInt()
+                val ledHeight = maxOf(radius + density.toInt(), expandedKeyHeightPx + stripHeight)
+                (indicatorView?.layoutParams as? LayoutParams)?.apply {
+                    height = ledHeight
+                    topMargin = -(ledHeight - stripHeight).coerceAtLeast(0)
+                }
+                expandedSurfaceView?.apply {
+                    outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            val left = (radii.first - stripHeight).coerceAtLeast(0).toFloat()
+                            val right = (radii.second - stripHeight).coerceAtLeast(0).toFloat()
+                            val path = Path().apply {
+                                addRoundRect(
+                                    RectF(stripHeight.toFloat(), -2f * radius, view.width.toFloat() - stripHeight, view.height.toFloat()),
+                                    floatArrayOf(0f, 0f, 0f, 0f, right, right, left, left),
+                                    Path.Direction.CW
+                                )
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outline.setPath(path)
+                            else {
+                                @Suppress("DEPRECATION")
+                                outline.setConvexPath(path)
+                            }
+                        }
+                    }
+                    clipToOutline = true
+                    invalidateOutline()
+                }
+                return
+            }
             if (softwareKeyboardModeActive || expandedSurfaceView?.visibility != View.GONE ||
                 indicatorView?.visibility != View.VISIBLE || surfaceView?.visibility != View.VISIBLE
             ) return

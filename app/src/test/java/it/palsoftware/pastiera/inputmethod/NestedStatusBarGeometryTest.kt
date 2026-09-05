@@ -64,6 +64,7 @@ class NestedStatusBarGeometryTest {
         assertEquals("Side lights must begin at the top of a tall row", row.top, surface.top)
 
         expanded.visibility = View.VISIBLE
+        chrome.indicatorView = null
         chrome.requestLayout()
         measure()
         assertEquals(0, row.left)
@@ -76,5 +77,32 @@ class NestedStatusBarGeometryTest {
         measure()
         assertEquals(0, row.left)
         assertEquals(row.bottom, surface.top)
+    }
+
+    @Test
+    fun expandedKeyboardOverlaysCornerLightsInsteadOfReservingCornerHeight() {
+        val context = RuntimeEnvironment.getApplication()
+        val chrome = StatusBarController.ImeChromeLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val surface = FrameLayout(context)
+        val stack = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val content = FrameLayout(context)
+        val lights = View(context)
+        stack.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        stack.addView(lights, LinearLayout.LayoutParams(-1, -2))
+        surface.addView(stack, FrameLayout.LayoutParams(-1, -1))
+        chrome.addView(surface, LinearLayout.LayoutParams(-1, 400))
+        chrome.surfaceView = surface
+        chrome.expandedSurfaceView = content
+        chrome.indicatorView = lights
+        chrome.bottomCornerRadiiPx = 100 to 100
+        chrome.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        chrome.layout(0, 0, chrome.measuredWidth, chrome.measuredHeight)
+        assertTrue(content.clipToOutline)
+        assertEquals((3.1f * context.resources.displayMetrics.density).toInt(), surface.height - content.height)
+        assertTrue(lights.top < content.bottom)
+        assertEquals(surface.height, lights.bottom)
     }
 }

@@ -19,6 +19,28 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [33])
 class LedStatusViewTest {
     @Test
+    fun roundedOverlayPassesCenterTouchesThroughButRetainsBottomStripGestures() {
+        val leds = LedStatusView(RuntimeEnvironment.getApplication()).apply {
+            bottomCornerRadiiPx = 100 to 100
+        }
+        val view = leds.ensureView()
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(110, View.MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, 1000, 110)
+        fun touch(x: Float, y: Float): Boolean {
+            val event = android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_DOWN, x, y, 0)
+            return try { view.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
+        org.junit.Assert.assertFalse(touch(50f, 50f))
+        org.junit.Assert.assertFalse(touch(500f, 50f))
+        assertTrue(touch(500f, 109f))
+        leds.bottomCornerRadiiPx = null
+        assertTrue(touch(500f, 50f))
+    }
+
+    @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun roundedIndicatorsBendUpBothSidesAndToggleBackToFlat() {
         val leds = LedStatusView(RuntimeEnvironment.getApplication()).apply {
