@@ -53,6 +53,7 @@ class LedStatusView(
     private var container: ModifierLedCanvas? = null
     private val ledsByState = mutableMapOf<ModifierLedState, MutableList<View>>()
     private val segmentsByView = mutableMapOf<View, ModifierLedSegment>()
+    private val inactiveUpperStates = mutableSetOf(ModifierLedState.ALT, ModifierLedState.SYM)
 
     var bottomCornerRadiiPx: Pair<Int, Int>? = null
         set(value) {
@@ -118,7 +119,7 @@ class LedStatusView(
         ledsByState.clear()
         segmentsByView.clear()
         canvas.replaceSegments(layout.segments) { segment ->
-            createLedView(LED_COLOR_GRAY_OFF, segment).also { led ->
+            createLedView(themeOverride?.ledInactive ?: LED_COLOR_GRAY_OFF, segment).also { led ->
                 ledsByState.getOrPut(segment.state) { mutableListOf() }.add(led)
             }
         }
@@ -146,6 +147,11 @@ class LedStatusView(
                     super.draw(canvas)
                     return
                 }
+                // Alt/Sym share the outer positions with Shift. Show the upper
+                // contour only when it carries an active modifier state.
+                if (layout == ModifierLedLayouts.TITAN_2_ELITE && segment.y == 0f &&
+                    segment.state in inactiveUpperStates
+                ) return
                 val width = bounds.width().toFloat()
                 val height = bounds.height().toFloat()
                 // Each row follows a concentric contour, so the indicator retains
@@ -169,10 +175,17 @@ class LedStatusView(
                 }
                 val measure = PathMeasure(contour, false)
                 paint.strokeWidth = segment.height * ledHeight
+                val joinRightIndicators = layout == ModifierLedLayouts.TITAN_2_ELITE &&
+                    (segment.state == ModifierLedState.CTRL ||
+                        (segment.state == ModifierLedState.SHIFT && segment.x > 0.5f))
+                paint.strokeCap = if (joinRightIndicators) Paint.Cap.BUTT else Paint.Cap.ROUND
                 // Leave room for the round caps at both ends of each segment.
-                val cap = paint.strokeWidth / 2f
+                val cap = if (joinRightIndicators) 0f else paint.strokeWidth / 2f
                 val start = measure.length * segment.x + cap
-                val end = measure.length * (segment.x + segment.width) - cap
+                val endFraction = if (joinRightIndicators && segment.state == ModifierLedState.CTRL) {
+                    layout.segments.first { it.state == ModifierLedState.SHIFT && it.x > segment.x }.x
+                } else segment.x + segment.width
+                val end = measure.length * endFraction - cap
                 if (end > start) {
                     val stroke = Path()
                     measure.getSegment(start, end, stroke, true)
@@ -187,6 +200,9 @@ class LedStatusView(
     }
 
     private fun updateLeds(state: ModifierLedState, isLocked: Boolean, isActive: Boolean = false) {
+        if (state == ModifierLedState.ALT) {
+            if (isLocked || isActive) inactiveUpperStates.remove(state) else inactiveUpperStates.add(state)
+        }
         val theme = themeOverride
         val targetColor = when {
             isLocked -> theme?.ledLocked ?: LED_COLOR_RED_LOCKED
@@ -197,6 +213,8 @@ class LedStatusView(
     }
 
     private fun updateSymLeds(symPage: Int) {
+        if (symPage > 0) inactiveUpperStates.remove(ModifierLedState.SYM)
+        else inactiveUpperStates.add(ModifierLedState.SYM)
         val theme = themeOverride
         val targetColor = when (symPage) {
             1 -> theme?.ledActive ?: LED_COLOR_BLUE_ACTIVE

@@ -530,7 +530,7 @@ class VariationBarView(
         }
         currentVariationsRow = null
 
-        val spacingBetweenButtons = TypedValue.applyDimension(
+        val spacingBetweenButtons = if (roundedCorners) 0 else TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             3f,
             context.resources.displayMetrics
@@ -1129,11 +1129,14 @@ class VariationBarView(
                 heightPx = buttonHeight,
                 normalColor = it.normalKey,
                 pressedColor = it.accent,
-                cornerRadiusRatio = it.chromeCornerRadiusRatio,
+                cornerRadiusRatio = if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) 0f else it.chromeCornerRadiusRatio,
                 borderColor = it.divider,
-                borderWidthPx = dpToPx(1f)
+                borderWidthPx = if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) 0 else dpToPx(1f)
             )
-        } ?: VariationButtonStyles.createButtonDrawable(buttonHeight)
+        } ?: VariationButtonStyles.createButtonDrawable(
+            buttonHeight,
+            cornerRadiusRatio = if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) 0f else VariationButtonStyles.BUTTON_CORNER_RADIUS_RATIO
+        )
 
         return TextView(context).apply {
             text = variation
@@ -1197,14 +1200,14 @@ class VariationBarView(
     }
 
     private fun createPlaceholderButton(buttonWidth: Int, buttonHeight: Int): View {
-        val dp3 = TypedValue.applyDimension(
+        val dp3 = if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) 0 else TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             3f,
             context.resources.displayMetrics
         ).toInt()
         val drawable = GradientDrawable().apply {
             setColor(Color.TRANSPARENT)
-            cornerRadius = VariationButtonStyles.cornerRadiusForSize(
+            cornerRadius = if (SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) 0f else VariationButtonStyles.cornerRadiusForSize(
                 buttonHeight,
                 themeOverride?.chromeCornerRadiusRatio
             )

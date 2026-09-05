@@ -6,6 +6,8 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Outline
 import android.graphics.Matrix
 import android.graphics.Path
@@ -50,6 +52,7 @@ import it.palsoftware.pastiera.inputmethod.ui.VariationBarView
 import it.palsoftware.pastiera.inputmethod.ui.KeyboardThemeColors
 import it.palsoftware.pastiera.inputmethod.suggestions.ui.FullSuggestionsBar
 import it.palsoftware.pastiera.inputmethod.statusbar.StatusBarButtonRegistry
+import it.palsoftware.pastiera.inputmethod.statusbar.StatusBarButtonPosition
 import it.palsoftware.pastiera.inputmethod.statusbar.StatusBarCallbacks
 import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils
 import it.palsoftware.pastiera.inputmethod.subtype.AdditionalSubtypeUtils.languageCode
@@ -440,8 +443,24 @@ class StatusBarController(
 
     private fun applyKeyboardThemeOverrides(activeColors: KeyboardThemeColors) {
         statusBarLayout?.setBackgroundColor(activeColors.background)
-        symSurfaceStack?.setBackgroundColor(activeColors.background)
-        symSurfaceContainer?.setBackgroundColor(activeColors.background)
+        val roundedCorners = SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+        val surfaceBackground = if (roundedCorners) Color.TRANSPARENT else activeColors.background
+        symSurfaceStack?.setBackgroundColor(surfaceBackground)
+        symSurfaceContainer?.setBackgroundColor(surfaceBackground)
+        (statusBarLayout as? ImeChromeLayout)?.let { chrome ->
+            val regularButtons = buttonRegistry.getEnabledButtons(context)
+            val compactButtons = buttonRegistry.getEnabledPastierinaButtons(context)
+            chrome.regularCornerColors = Pair(
+                if (regularButtons.any { it.position == StatusBarButtonPosition.LEFT }) activeColors.statusBarButton else activeColors.normalKey,
+                if (regularButtons.any { it.position == StatusBarButtonPosition.RIGHT }) activeColors.statusBarButton else activeColors.normalKey
+            )
+            chrome.compactCornerColors = Pair(
+                if (compactButtons.any { it.position == StatusBarButtonPosition.LEFT }) activeColors.statusBarButton else activeColors.suggestion,
+                if (compactButtons.any { it.position == StatusBarButtonPosition.RIGHT }) activeColors.statusBarButton else activeColors.suggestion
+            )
+            chrome.bottomFillColors = activeColors.normalKey to activeColors.suggestion
+            chrome.invalidate()
+        }
         emojiKeyboardContainer?.setBackgroundColor(activeColors.background)
         variationBarView?.themeOverride = activeColors
         ledStatusView.themeOverride = activeColors
@@ -3457,6 +3476,27 @@ class StatusBarController(
 
     internal class ImeChromeLayout(context: Context) : LinearLayout(context) {
         private val screenAwakeController = ImeTouchScreenAwakeController(context)
+        var regularCornerColors: Pair<Int, Int> = Color.BLACK to Color.BLACK
+        var compactCornerColors: Pair<Int, Int> = Color.BLACK to Color.BLACK
+        var bottomFillColors: Pair<Int, Int> = Color.BLACK to Color.BLACK
+        private val cornerFillPaint = Paint()
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val row = nestedRow ?: return
+            val radii = bottomCornerRadiiPx ?: return
+            val colors = if (row === compactStatusRow) compactCornerColors else regularCornerColors
+            // Fill only the corner cutouts beside this row. Never paint across
+            // the suggestion/variation boundary or extend a button below its row.
+            cornerFillPaint.color = colors.first
+            canvas.drawRect(0f, row.top.toFloat(), radii.first.toFloat(), row.bottom.toFloat(), cornerFillPaint)
+            cornerFillPaint.color = colors.second
+            canvas.drawRect((width - radii.second).toFloat(), row.top.toFloat(), width.toFloat(), row.bottom.toFloat(), cornerFillPaint)
+            // Continue the row's themed surface to the bottom of the display.
+            // Children draw afterward, keeping the modifier lights above the fill.
+            cornerFillPaint.color = if (row === compactStatusRow) bottomFillColors.second else bottomFillColors.first
+            canvas.drawRect(0f, row.bottom.toFloat(), width.toFloat(), height.toFloat(), cornerFillPaint)
+        }
         var indicatorView: View? = null
         var expandedSurfaceView: View? = null
         var compactStatusRow: View? = null
@@ -3561,7 +3601,7 @@ class StatusBarController(
                             val child = view.getChildAt(index)
                             if (child.visibility == View.VISIBLE &&
                                 child.height >= originalContentHeight - 4f * resources.displayMetrics.density &&
-                                child.height < view.height
+                                child.height <= view.height
                             ) extendContent(child)
                         }
                     }

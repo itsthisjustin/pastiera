@@ -199,18 +199,20 @@ class StatusBarButtonHost(
             }
         }
         val theme = themeOverride ?: return
+        (view.getTag(it.palsoftware.pastiera.R.id.tag_badge_view) as? TextView)?.setTextColor(theme.iconColor)
         val height = view.layoutParams?.height?.takeIf { it > 0 }
             ?: view.height.takeIf { it > 0 }
             ?: fallbackHeight?.takeIf { it > 0 }
         if (height != null) {
             val active = state is ButtonState.MinimalUiState && state.isActive
+            val gapless = it.palsoftware.pastiera.SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
             view.background = StatusBarButtonStyles.createButtonDrawable(
                 heightPx = height,
                 normalColor = if (active) theme.pressedColor else theme.normalColor,
                 pressedColor = theme.pressedColor,
-                cornerRadiusRatio = theme.cornerRadiusRatio,
+                cornerRadiusRatio = if (gapless) 0f else theme.cornerRadiusRatio,
                 borderColor = theme.borderColor,
-                borderWidthPx = theme.borderWidthPx
+                borderWidthPx = if (gapless) 0 else theme.borderWidthPx
             )
         }
         when (view) {

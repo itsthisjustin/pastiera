@@ -28,7 +28,7 @@ class NestedStatusBarGeometryTest {
         val button = android.widget.ImageView(context)
         buttonWrapper.addView(button, FrameLayout.LayoutParams(112, 74))
         side.addView(buttonWrapper, LinearLayout.LayoutParams(112, 74))
-        row.addView(side, FrameLayout.LayoutParams(112, 74, android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL))
+        row.addView(side, FrameLayout.LayoutParams(112, -1, android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL))
         val surface = View(context)
         val expanded = View(context).apply { visibility = View.GONE }
         chrome.addView(row, LinearLayout.LayoutParams(-1, 74))
