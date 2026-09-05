@@ -3719,7 +3719,12 @@ class StatusBarController(
             val requestedRowHeight = params.height.coerceAtLeast(0)
             val bottomInset = (3.1f * resources.displayMetrics.density).toInt()
             indicatorView?.layoutParams?.height = maxOf(radius + stripTop, requestedRowHeight + bottomInset)
-            val overlap = maxOf((radius + stripTop - inset).coerceAtLeast(0), requestedRowHeight)
+            // A fixed-height row does not honor minimumHeight during measurement.
+            // Overlapping more than that height puts the LED surface above the
+            // row's top, while LinearLayout still reserves its full height below.
+            // onLayout expands the row to meet the LEDs after measurement.
+            val overlap = if (params.height >= 0) requestedRowHeight
+                else (radius + stripTop - inset).coerceAtLeast(0)
             params.bottomMargin -= overlap
             row.minimumHeight = maxOf(originalRowMinHeight, overlap)
             row.outlineProvider = object : ViewOutlineProvider() {

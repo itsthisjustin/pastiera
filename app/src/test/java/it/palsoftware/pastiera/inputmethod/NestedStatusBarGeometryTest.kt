@@ -54,6 +54,7 @@ class NestedStatusBarGeometryTest {
         assertEquals(0, buttonWrapper.top)
         assertEquals(row.height, button.height)
         assertTrue(row.bottom > surface.top)
+        assertEquals("No unused band may remain below the indicators", chrome.height, surface.bottom)
         assertEquals((3.1f * context.resources.displayMetrics.density).toInt(), surface.bottom - row.bottom)
         val nestedHeight = chrome.measuredHeight
         measure()
