@@ -70,7 +70,7 @@ fun checkForUpdate(
                 val normalizedLatest = normalizeReleaseVersion(latestVersion)
                 val normalizedCurrent = normalizeReleaseVersion(currentVersion)
                 
-                val hasUpdate = normalizedLatest != normalizedCurrent
+                val hasUpdate = isReleaseVersionNewer(normalizedLatest, normalizedCurrent)
                 
                 // If ignoring dismissed releases, check if this release was dismissed
                 if (hasUpdate && ignoreDismissedReleases) {

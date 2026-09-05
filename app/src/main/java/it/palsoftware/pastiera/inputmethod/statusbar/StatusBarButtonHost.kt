@@ -184,6 +184,20 @@ class StatusBarButtonHost(
     }
 
     private fun applyTheme(view: View, fallbackHeight: Int? = null, state: ButtonState? = null) {
+        (view.getTag(it.palsoftware.pastiera.R.id.tag_badge_view) as? TextView)?.let { badge ->
+            val params = view.layoutParams
+            val enlargedPastierinaButton = params != null && params.height > 0 &&
+                params.width > params.height * 1.2f &&
+                it.palsoftware.pastiera.SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)
+            badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (enlargedPastierinaButton) 14f else 10f)
+            (badge.layoutParams as? FrameLayout.LayoutParams)?.let { badgeParams ->
+                val rightMargin = dpToPx(if (enlargedPastierinaButton) 12f else 2f)
+                if (badgeParams.rightMargin != rightMargin) {
+                    badgeParams.rightMargin = rightMargin
+                    badge.layoutParams = badgeParams
+                }
+            }
+        }
         val theme = themeOverride ?: return
         val height = view.layoutParams?.height?.takeIf { it > 0 }
             ?: view.height.takeIf { it > 0 }

@@ -1,7 +1,9 @@
 package it.palsoftware.pastiera.update
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UpdateCheckerFlavorLogicTest {
@@ -46,6 +48,48 @@ class UpdateCheckerFlavorLogicTest {
         assertEquals("0.85", normalizeReleaseVersion("v0.85"))
         assertEquals("0.85", normalizeReleaseVersion("V0.85"))
         assertEquals("0.85-nightly.20260306.214144", normalizeReleaseVersion("nightly/v0.85-nightly.20260306.214144"))
+    }
+
+    @Test
+    fun newerReleaseTriggersUpdate() {
+        assertTrue(isReleaseVersionNewer("0.86", "0.85"))
+        assertTrue(isReleaseVersionNewer("1.0", "0.99"))
+        assertTrue(
+            isReleaseVersionNewer(
+                "0.86-nightly.20260820.222455",
+                "0.86-nightly.20260811.214801"
+            )
+        )
+    }
+
+    @Test
+    fun sameOrOlderReleaseDoesNotTriggerUpdate() {
+        assertFalse(isReleaseVersionNewer("0.85", "0.85"))
+        assertFalse(isReleaseVersionNewer("0.85", "0.86"))
+        assertFalse(
+            isReleaseVersionNewer(
+                "0.86-nightly.20260811.214801",
+                "0.86-nightly.20260820.222455"
+            )
+        )
+        assertFalse(
+            isReleaseVersionNewer(
+                "0.86-nightly.20260811.214801",
+                "0.86-nightly.20260811.214801"
+            )
+        )
+    }
+
+    @Test
+    fun releaseWithoutSuffixIsNewerThanPrereleaseOfSameCore() {
+        assertTrue(isReleaseVersionNewer("0.86", "0.86-nightly.20260820.222455"))
+        assertFalse(isReleaseVersionNewer("0.86-nightly.20260820.222455", "0.86"))
+    }
+
+    @Test
+    fun unparseableVersionsFallBackToInequality() {
+        assertTrue(isReleaseVersionNewer("abc", "def"))
+        assertFalse(isReleaseVersionNewer("abc", "abc"))
     }
 
     private fun sampleReleases(): List<GitHubRelease> =

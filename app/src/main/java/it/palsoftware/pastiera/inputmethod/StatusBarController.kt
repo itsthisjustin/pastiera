@@ -6,6 +6,10 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.Matrix
+import android.graphics.Path
+import android.graphics.RectF
 import androidx.core.content.ContextCompat
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -15,6 +19,7 @@ import android.view.MotionEvent
 import android.view.RoundedCorner
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import android.widget.FrameLayout
@@ -257,7 +262,7 @@ class StatusBarController(
     companion object {
         private const val TAG = "StatusBarController"
         private val DEFAULT_BACKGROUND = Color.parseColor("#000000")
-        private const val TITAN_2_ELITE_CORNER_FALLBACK_RADIUS_DP = 24f
+        private const val TITAN_2_ELITE_CORNER_FALLBACK_RADIUS_DP = 50f
     }
 
     data class StatusSnapshot(
@@ -350,8 +355,6 @@ class StatusBarController(
     private var baseLeftPadding: Int = 0
     private var baseRightPadding: Int = 0
     private var baseBottomPadding: Int = 0
-    private var bottomRowBaseLeftPadding: Int = 0
-    private var bottomRowBaseRightPadding: Int = 0
     private var lastHamburgerInputConnection: android.view.inputmethod.InputConnection? = null
     private var lastInsetsLogSignature: String? = null
     private var softwareKeyboardShown: Boolean = false
@@ -630,34 +633,22 @@ class StatusBarController(
                     } else {
                         0
                     }
-                    val cornerInsets = Titan2EliteBottomRowSafeArea.resolveInsetsPx(
-                        enabled = useTitan2EliteRoundedCornerInsets,
-                        leftCornerRadiusPx = bottomLeftRadius,
-                        rightCornerRadiusPx = bottomRightRadius,
-                        fallbackCornerRadiusPx = fallbackCornerRadius
-                    )
-                    val appliedBottomRowLeftPadding = bottomRowBaseLeftPadding +
-                        if (useTitan2EliteRoundedCornerInsets) {
-                            max(cutout.left, cornerInsets.left)
-                        } else {
-                            0
-                        }
-                    val appliedBottomRowRightPadding = bottomRowBaseRightPadding +
-                        if (useTitan2EliteRoundedCornerInsets) {
-                            max(cutout.right, cornerInsets.right)
-                        } else {
-                            0
-                        }
                     val bottomInset = max(navAndGestures.bottom, cutout.bottom)
                     val appliedBottomPadding = baseBottomPadding + bottomInset
+                    (view as? ImeChromeLayout)?.bottomCornerRadiiPx =
+                        if (useTitan2EliteRoundedCornerInsets) {
+                            Pair(
+                                bottomLeftRadius.takeIf { it > 0 } ?: fallbackCornerRadius,
+                                bottomRightRadius.takeIf { it > 0 } ?: fallbackCornerRadius
+                            )
+                        } else {
+                            null
+                        }
+                    ledStatusView.bottomCornerRadiiPx = (view as? ImeChromeLayout)?.bottomCornerRadiiPx
                     view.updatePadding(
                         left = baseLeftPadding,
                         right = baseRightPadding,
                         bottom = appliedBottomPadding
-                    )
-                    variationsWrapper?.updatePadding(
-                        left = appliedBottomRowLeftPadding,
-                        right = appliedBottomRowRightPadding
                     )
                     logImeOverlayInsetsIfEnabled(
                         navBottom = navAndGestures.bottom,
@@ -730,10 +721,6 @@ class StatusBarController(
             }
 
             variationsWrapper = variationBarView?.ensureView()
-            variationsWrapper?.let { bottomRow ->
-                bottomRowBaseLeftPadding = bottomRow.paddingLeft
-                bottomRowBaseRightPadding = bottomRow.paddingRight
-            }
             attachHamburgerMenu(variationsWrapper)
             ledStatusView.layout = modifierLedLayout()
             val ledStrip = ledStatusView.ensureView()
@@ -781,6 +768,9 @@ class StatusBarController(
             }
             (statusBarLayout as? ImeChromeLayout)?.apply {
                 surfaceView = symSurfaceContainer
+                indicatorView = ledStrip
+                expandedSurfaceView = emojiKeyboardContainer
+                compactStatusRow = fullSuggestionsBar?.ensureView()
             }
             applyChromeZOrder()
             applyAccessibilitySecondRowReadPreference()
@@ -3465,8 +3455,174 @@ class StatusBarController(
         ).toInt()
     }
 
-    private class ImeChromeLayout(context: Context) : LinearLayout(context) {
+    internal class ImeChromeLayout(context: Context) : LinearLayout(context) {
         private val screenAwakeController = ImeTouchScreenAwakeController(context)
+        var indicatorView: View? = null
+        var expandedSurfaceView: View? = null
+        var compactStatusRow: View? = null
+        private var nestedRow: View? = null
+        private var originalRowMargins = intArrayOf(0, 0, 0)
+        private var originalRowOutline: ViewOutlineProvider? = null
+        private var originalRowClip = false
+        private var originalRowMinHeight = 0
+        private val originalIconTransforms = mutableMapOf<ImageView, Pair<ImageView.ScaleType, Matrix>>()
+
+        private fun updateNestedStatusRow() {
+            nestedRow?.let { row ->
+                (row.layoutParams as LayoutParams).apply {
+                    leftMargin = originalRowMargins[0]
+                    rightMargin = originalRowMargins[1]
+                    bottomMargin = originalRowMargins[2]
+                }
+                row.outlineProvider = originalRowOutline
+                row.clipToOutline = originalRowClip
+                row.minimumHeight = originalRowMinHeight
+            }
+            nestedRow = null
+            val radii = bottomCornerRadiiPx ?: return
+            if (softwareKeyboardModeActive || expandedSurfaceView?.visibility != View.GONE ||
+                indicatorView?.visibility != View.VISIBLE || surfaceView?.visibility != View.VISIBLE
+            ) return
+            val surfaceIndex = indexOfChild(surfaceView)
+            val row = (surfaceIndex - 1 downTo 0)
+                .map(::getChildAt).firstOrNull { it.visibility == View.VISIBLE } ?: return
+            val params = row.layoutParams as LayoutParams
+            nestedRow = row
+            originalRowMargins = intArrayOf(params.leftMargin, params.rightMargin, params.bottomMargin)
+            originalRowOutline = row.outlineProvider
+            originalRowClip = row.clipToOutline
+            originalRowMinHeight = row.minimumHeight
+            // Both LED rows occupy 5.5 dp, with 1 dp of edge spacing.
+            val inset = (6.5f * resources.displayMetrics.density).toInt()
+            val radius = maxOf(radii.first, radii.second)
+            val stripTop = (resources.displayMetrics.density).toInt()
+            params.leftMargin += inset
+            params.rightMargin += inset
+            // The LED surface draws first; overlap its empty center with the row.
+            val overlap = (radius + stripTop - inset).coerceAtLeast(0)
+            params.bottomMargin -= overlap
+            row.minimumHeight = maxOf(originalRowMinHeight, overlap)
+            row.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    val left = (radii.first - inset).coerceAtLeast(0).toFloat()
+                    val right = (radii.second - inset).coerceAtLeast(0).toFloat()
+                    val bottomExtension = inset - (3.1f * resources.displayMetrics.density).toInt()
+                    val path = Path().apply {
+                        addRoundRect(
+                            RectF(0f, -2f * radius, view.width.toFloat(), view.height.toFloat()),
+                            floatArrayOf(0f, 0f, 0f, 0f, right, right + bottomExtension, left, left + bottomExtension),
+                            Path.Direction.CW
+                        )
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outline.setPath(path)
+                    else {
+                        @Suppress("DEPRECATION")
+                        outline.setConvexPath(path)
+                    }
+                }
+            }
+            row.clipToOutline = true
+            row.invalidateOutline()
+        }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            originalIconTransforms.forEach { (icon, original) ->
+                icon.scaleType = original.first
+                icon.imageMatrix = original.second
+            }
+            originalIconTransforms.clear()
+            val row = nestedRow as? ViewGroup ?: return
+            val originalContentHeight = row.height
+            // A fixed-height row can be shorter than the requested overlap.
+            // Anchor its actual bottom to the inner LED contour after layout.
+            // The straight lower indicators occupy only the lower LED row;
+            // their top edge is closer to the bottom than the two-row side arcs.
+            val bottomInset = (3.1f * resources.displayMetrics.density).toInt()
+            surfaceView?.let { surface ->
+                val targetBottom = surface.bottom - bottomInset
+                val extraHeight = (targetBottom - row.bottom).coerceAtLeast(0)
+                // Fill the space up to the row's original top instead of translating
+                // a short row downward and exposing an empty band above it.
+                fun extendContent(view: View) {
+                    val oldTop = if (view === row) view.top else 0
+                    val oldLeft = view.left
+                    val oldWidth = view.width
+                    val oldHeight = view.height
+                    val targetHeight = if (view === row) oldHeight + extraHeight
+                        else (view.parent as View).height
+                    view.measure(
+                        MeasureSpec.makeMeasureSpec(oldWidth, MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(targetHeight, MeasureSpec.EXACTLY)
+                    )
+                    view.layout(oldLeft, oldTop, oldLeft + oldWidth, oldTop + targetHeight)
+                    if (view is ViewGroup) {
+                        for (index in 0 until view.childCount) {
+                            val child = view.getChildAt(index)
+                            if (child.visibility == View.VISIBLE &&
+                                child.height >= originalContentHeight - 4f * resources.displayMetrics.density &&
+                                child.height < view.height
+                            ) extendContent(child)
+                        }
+                    }
+                }
+                if (extraHeight > 0) extendContent(row)
+            }
+            // Fixed-height button containers otherwise leave unused space beneath
+            // their contents when the corner geometry makes the row taller.
+            for (index in 0 until row.childCount) {
+                val child = row.getChildAt(index)
+                if (child.visibility == View.VISIBLE && child.height < row.height) {
+                    child.offsetTopAndBottom(row.height - row.paddingBottom - child.bottom)
+                }
+            }
+            val radii = bottomCornerRadiiPx ?: return
+            fun fitIcons(view: View, offsetX: Int) {
+                if (view is ImageView && view.visibility == View.VISIBLE) {
+                    val onLeft = offsetX < radii.first
+                    val onRight = offsetX + view.width > row.width - radii.second
+                    val drawable = view.drawable
+                    if ((onLeft || onRight) && drawable != null &&
+                        drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0
+                    ) {
+                        originalIconTransforms[view] = view.scaleType to Matrix(view.imageMatrix)
+                        val iconFraction = if (row === compactStatusRow) 0.64f else 0.48f
+                        val iconHeight = if (row === compactStatusRow) {
+                            (minOf(view.height, originalContentHeight) - 4f * resources.displayMetrics.density).coerceAtLeast(1f)
+                        } else view.height.toFloat()
+                        val size = minOf(view.width.toFloat(), iconHeight) * iconFraction
+                        val requestedScale = size / maxOf(drawable.intrinsicWidth, drawable.intrinsicHeight)
+                        val scale = if (row === compactStatusRow) requestedScale else minOf(1f, requestedScale)
+                        val inward = 4f * resources.displayMetrics.density * if (onLeft) 1f else -1f
+                        view.scaleType = ImageView.ScaleType.MATRIX
+                        view.imageMatrix = Matrix().apply {
+                            setScale(scale, scale)
+                            postTranslate(
+                                (view.width - drawable.intrinsicWidth * scale) / 2f - view.paddingLeft + inward,
+                                (view.height - drawable.intrinsicHeight * scale) / 2f - view.paddingTop -
+                                    2f * resources.displayMetrics.density
+                            )
+                        }
+                    }
+                }
+                if (view is ViewGroup) {
+                    for (index in 0 until view.childCount) {
+                        val child = view.getChildAt(index)
+                        fitIcons(child, offsetX + child.left)
+                    }
+                }
+            }
+            fitIcons(row, 0)
+        }
+
+        // (left, right) display corner radii in px; null disables the outline clip.
+        var bottomCornerRadiiPx: Pair<Int, Int>? = null
+            set(value) {
+                if (field == value) return
+                field = value
+                applyBottomCornerClip()
+                requestLayout()
+            }
 
         var surfaceView: View? = null
             set(value) {
@@ -3489,12 +3645,46 @@ class StatusBarController(
             return super.dispatchTouchEvent(event)
         }
 
+        // Extend the shape above the view so even a bar shorter than the display
+        // radius follows the original arc, rather than shrinking it to fit the bar.
+        private fun applyBottomCornerClip() {
+            val radii = bottomCornerRadiiPx
+            val radius = radii?.let { maxOf(it.first, it.second) } ?: 0
+            if (radius <= 0) {
+                clipToOutline = false
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+                return
+            }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    val left = radii!!.first.coerceIn(0, view.width / 2).toFloat()
+                    val right = radii.second.coerceIn(0, view.width / 2).toFloat()
+                    val path = Path().apply {
+                        addRoundRect(
+                            RectF(0f, -2f * radius, view.width.toFloat(), view.height.toFloat()),
+                            floatArrayOf(0f, 0f, 0f, 0f, right, right, left, left),
+                            Path.Direction.CW
+                        )
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        outline.setPath(path)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        outline.setConvexPath(path)
+                    }
+                }
+            }
+            clipToOutline = true
+            invalidateOutline()
+        }
+
         override fun onDetachedFromWindow() {
             screenAwakeController.release()
             super.onDetachedFromWindow()
         }
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            updateNestedStatusRow()
             val surface = surfaceView
             if (!softwareKeyboardModeActive || surface == null || surface.visibility == View.GONE) {
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec)

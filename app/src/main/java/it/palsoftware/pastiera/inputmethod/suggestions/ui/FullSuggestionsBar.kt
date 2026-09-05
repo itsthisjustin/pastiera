@@ -474,6 +474,13 @@ class FullSuggestionsBar(
         }
     }
 
+    private fun minimalButtonWidthPx(): Int {
+        val size = (targetHeightPx - dpToPx(4f)).coerceAtLeast(dpToPx(24f))
+        return if (it.palsoftware.pastiera.SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) {
+            maxOf(dpToPx(56f), (size * 1.6f).toInt())
+        } else size
+    }
+
     private fun renderMinimalUiButtons() {
         val leftContainer = minimalLeftButtonsContainer ?: return
         val rightContainer = minimalRightButtonsContainer ?: return
@@ -490,6 +497,10 @@ class FullSuggestionsBar(
         }
 
         val buttonSize = (targetHeightPx - dpToPx(4f)).coerceAtLeast(dpToPx(24f))
+        val buttonWidth = minimalButtonWidthPx()
+        val buttonHeight = if (it.palsoftware.pastiera.SettingsManager.getTitan2EliteRoundedCornerInsetsEnabled(context)) {
+            targetHeightPx
+        } else buttonSize
         val spacing = dpToPx(3f)
         val callbacks = (callbacksProvider?.invoke() ?: StatusBarCallbacks())
             .copy(onHamburgerMenuRequested = { toggleHamburgerMenu() })
@@ -499,10 +510,10 @@ class FullSuggestionsBar(
                 id = buttonId,
                 size = buttonSize,
                 callbacks = callbacks,
-                width = buttonSize,
-                height = buttonSize
+                width = buttonWidth,
+                height = buttonHeight
             ) ?: return
-            hosted.container.layoutParams = LinearLayout.LayoutParams(buttonSize, buttonSize).apply {
+            hosted.container.layoutParams = LinearLayout.LayoutParams(buttonWidth, buttonHeight).apply {
                 marginEnd = if (isLast) 0 else spacing
             }
             target.addView(hosted.container)
@@ -538,7 +549,7 @@ class FullSuggestionsBar(
         } ?: 0
         val minimalLeftInset = if (showMinimalUiButtons) {
             minimalLeftButtonsContainer?.takeIf { it.visibility == View.VISIBLE }?.let {
-                it.childCount * (targetHeightPx - dpToPx(4f)).coerceAtLeast(dpToPx(24f)) +
+                it.childCount * minimalButtonWidthPx() +
                     (it.childCount - 1).coerceAtLeast(0) * spacing +
                     spacing
             } ?: 0
@@ -558,7 +569,7 @@ class FullSuggestionsBar(
         val leftInset = indicatorInset + minimalLeftInset
         val rightInset = if (showMinimalUiButtons) {
             minimalRightButtonsContainer?.takeIf { it.visibility == View.VISIBLE }?.let {
-                it.childCount * (targetHeightPx - dpToPx(4f)).coerceAtLeast(dpToPx(24f)) +
+                it.childCount * minimalButtonWidthPx() +
                     (it.childCount - 1).coerceAtLeast(0) * spacing +
                     spacing
             } ?: 0
